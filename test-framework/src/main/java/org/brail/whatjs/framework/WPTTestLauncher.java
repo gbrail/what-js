@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.Function;
 import org.mozilla.javascript.LambdaFunction;
+import org.mozilla.javascript.ScriptRuntime;
 import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.Undefined;
 
@@ -67,7 +68,7 @@ public class WPTTestLauncher {
     Function deferFunc = (Function) args[0];
     cx.enqueueMicrotask(
         () -> {
-          deferFunc.call(cx, scope, null, Context.emptyArgs);
+          deferFunc.call(cx, scope, null, ScriptRuntime.emptyArgs);
         });
     return Undefined.instance;
   }
@@ -84,7 +85,7 @@ public class WPTTestLauncher {
     // For the harness to actually work, build the whole harness and our
     // test script into a big script and run it all together.
 
-    StringBuilder testScript = new StringBuilder(testHarness);
+    var testScript = new StringBuilder(testHarness);
     testScript.append(script);
     cx.evaluateString(scope, testScript.toString(), "test.js", 1, null);
 

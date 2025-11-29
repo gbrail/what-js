@@ -15,6 +15,10 @@ public class ResultTracker {
   private String finalMessage;
   private Optional<FinalStatus> finalStatus = Optional.empty();
 
+  /**
+   * Return a function that can be passed to add_result_callback in the test harness. The function
+   * takes an argument of the "Test" class from the harness and extracts the test result from that.
+   */
   public Function getResultCallback(Scriptable scope) {
     return new LambdaFunction(
         scope,
@@ -28,6 +32,11 @@ public class ResultTracker {
         });
   }
 
+  /**
+   * Return a function that can be passed to add_completion_callback in the test harness. The first
+   * argument is an array of Test objects and the second is a TestsStatus object that we parse to
+   * see if the harness worked.
+   */
   public Function getCompletionCallback(Scriptable scope) {
     return new LambdaFunction(
         scope,
@@ -54,6 +63,7 @@ public class ResultTracker {
     return finalMessage;
   }
 
+  /** Generate a description of the test results. This may be used in a JUnit assertion. */
   public Supplier<String> getFailureReason() {
     return () -> {
       if (finalStatus.isPresent() && finalStatus.get() != FinalStatus.OK) {
@@ -68,7 +78,7 @@ public class ResultTracker {
     };
   }
 
-  // Return true only if harness ran successfully and all tests passed.
+  /** Return true only if harness ran successfully and all tests passed. */
   public boolean success() {
     if (finalStatus.isEmpty() || finalStatus.get() != FinalStatus.OK) {
       return false;
@@ -90,35 +100,24 @@ public class ResultTracker {
   }
 
   private static Status toStatus(int i) {
-    switch (i) {
-      case 0:
-        return Status.PASS;
-      case 1:
-        return Status.FAIL;
-      case 2:
-        return Status.TIMEOUT;
-      case 3:
-        return Status.NOTRUN;
-      case 4:
-        return Status.PRECONDITION_FAILED;
-      default:
-        throw new IllegalArgumentException("Unknown result status: " + i);
-    }
+    return switch (i) {
+      case 0 -> Status.PASS;
+      case 1 -> Status.FAIL;
+      case 2 -> Status.TIMEOUT;
+      case 3 -> Status.NOTRUN;
+      case 4 -> Status.PRECONDITION_FAILED;
+      default -> throw new IllegalArgumentException("Unknown result status: " + i);
+    };
   }
 
   private static FinalStatus toFinalStatus(int i) {
-    switch (i) {
-      case 0:
-        return FinalStatus.OK;
-      case 1:
-        return FinalStatus.ERROR;
-      case 2:
-        return FinalStatus.TIMEOUT;
-      case 3:
-        return FinalStatus.PRECONDITION_FAILED;
-      default:
-        throw new IllegalArgumentException("Unknown final status: " + i);
-    }
+    return switch (i) {
+      case 0 -> FinalStatus.OK;
+      case 1 -> FinalStatus.ERROR;
+      case 2 -> FinalStatus.TIMEOUT;
+      case 3 -> FinalStatus.PRECONDITION_FAILED;
+      default -> throw new IllegalArgumentException("Unknown final status: " + i);
+    };
   }
 
   public enum FinalStatus {
