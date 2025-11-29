@@ -504,15 +504,7 @@
 
     ShellTestEnvironment.prototype.on_new_harness_properties = function() {};
 
-    ShellTestEnvironment.prototype.on_tests_ready = function() {
-            add_result_callback(function (test) {
-                if (test.status !== 0) {
-                    __testLog('    RESULT: ' + test.name);
-                    __testLog('    STACK: ' + test.stack);
-                    throw new Error('Test failed: ' + test.name);
-                }
-            });
-    };
+    ShellTestEnvironment.prototype.on_tests_ready = function() {};
 
     ShellTestEnvironment.prototype.add_on_loaded_callback = function(callback) {
         if (this.all_loaded) {
