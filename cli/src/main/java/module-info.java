@@ -1,8 +1,8 @@
-module org.brail.whatjs.cli {
+module org.brail.jwhat.cli {
   requires org.mozilla.rhino;
   requires org.jline;
 
-  exports org.brail.whatjs.cli;
+  exports org.brail.jwhat.cli;
 
-  opens org.brail.whatjs.cli;
+  opens org.brail.jwhat.cli;
 }

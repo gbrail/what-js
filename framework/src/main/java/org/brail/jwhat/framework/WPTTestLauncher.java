@@ -1,4 +1,4 @@
-package org.brail.whatjs.framework;
+package org.brail.jwhat.framework;
 
 import java.io.IOException;
 import java.io.InputStream;

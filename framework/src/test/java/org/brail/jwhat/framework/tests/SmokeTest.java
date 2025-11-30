@@ -1,9 +1,9 @@
-package org.brail.whatjs.framework.tests;
+package org.brail.jwhat.framework.tests;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.IOException;
-import org.brail.whatjs.framework.WPTTestLauncher;
+import org.brail.jwhat.framework.WPTTestLauncher;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;

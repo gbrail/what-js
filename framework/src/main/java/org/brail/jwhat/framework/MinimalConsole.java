@@ -1,4 +1,4 @@
-package org.brail.whatjs.framework;
+package org.brail.jwhat.framework;
 
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.LambdaFunction;

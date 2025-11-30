@@ -1,4 +1,4 @@
-package org.brail.whatjs.cli;
+package org.brail.jwhat.cli;
 
 import java.io.IOException;
 import org.jline.reader.LineReaderBuilder;

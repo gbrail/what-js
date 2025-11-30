@@ -1,5 +1,5 @@
 plugins {
-    id 'whatjs.conventions'
+    id 'jwhat.conventions'
     id 'application'
 }
 
@@ -8,6 +8,6 @@ dependencies {
 }
 
 application {
-    //mainModule = 'org.brail.whatjs.cli'
-    mainClass = 'org.brail.whatjs.cli.CLI'
+    mainModule = 'org.brail.jwhat.cli'
+    mainClass = 'org.brail.jwhat.cli.CLI'
 }
