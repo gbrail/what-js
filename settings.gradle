@@ -1,3 +1,4 @@
 rootProject.name = 'what-js'
-include 'url'
+include 'cli'
+include 'core'
 include 'test-framework'

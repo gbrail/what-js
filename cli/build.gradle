@@ -1,0 +1,13 @@
+plugins {
+    id 'whatjs.conventions'
+    id 'application'
+}
+
+dependencies {
+    implementation 'org.jline:jline:3.30.6'
+}
+
+application {
+    //mainModule = 'org.brail.whatjs.cli'
+    mainClass = 'org.brail.whatjs.cli.CLI'
+}
