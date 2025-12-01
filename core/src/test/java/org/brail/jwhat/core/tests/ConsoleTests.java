@@ -3,6 +3,7 @@ package org.brail.jwhat.core.tests;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import org.brail.jwhat.console.Console;
 import org.brail.jwhat.framework.WPTTestLauncher;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -18,6 +19,7 @@ public class ConsoleTests {
   public static void init() throws IOException {
     cx = Context.enter();
     launcher = WPTTestLauncher.newLauncher();
+    launcher.setSetupCallback(Console::init);
   }
 
   @AfterAll

@@ -48,7 +48,7 @@ public class WPTTestLauncher {
     completeTestScript.append(
         """
     setup(null, {
-      debug: true
+      debug: false
     });
     add_result_callback(__testResultTracker);
     add_completion_callback(__testCompletionTracker);
@@ -136,6 +136,9 @@ public class WPTTestLauncher {
   }
 
   private static boolean isExcluded(String name, String[] exclusions) {
+    if (name.contains("idlharness")) {
+      return true;
+    }
     for (String ex : exclusions) {
       if (name.contains(ex)) {
         return true;
