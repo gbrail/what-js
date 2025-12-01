@@ -1,3 +1,7 @@
 plugins {
     id 'jwhat.conventions'
 }
+
+dependencies {
+    testImplementation project(':framework')
+}

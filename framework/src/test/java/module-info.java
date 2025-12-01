@@ -1,4 +1,4 @@
-module org.brail.whatjs.framework.tests {
+module org.brail.jwhat.framework.tests {
   requires org.brail.jwhat.framework;
   requires org.junit.jupiter.api;
   requires org.mozilla.rhino;

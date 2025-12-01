@@ -4,6 +4,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.function.BiConsumer;
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.Function;
 import org.mozilla.javascript.LambdaFunction;
@@ -15,6 +18,7 @@ public class WPTTestLauncher {
   private static final String TEST_BASE = "../wpt";
 
   private final CharSequence testHarness;
+  private BiConsumer<Context, Scriptable> setupCallback;
 
   public static WPTTestLauncher newLauncher() throws IOException {
     // Build a test script that includes the standard harness and all of our
@@ -24,7 +28,7 @@ public class WPTTestLauncher {
     try (InputStream in =
         WPTTestLauncher.class
             .getClassLoader()
-            .getResourceAsStream("org/brail/whatjs/framework/testharness.js")) {
+            .getResourceAsStream("org/brail/jwhat/framework/testharness.js")) {
       if (in == null) {
         throw new IOException("Could not find testharness.js resource");
       }
@@ -49,6 +53,10 @@ public class WPTTestLauncher {
     return new WPTTestLauncher(completeTestScript);
   }
 
+  public void setSetupCallback(BiConsumer<Context, Scriptable> callback) {
+    this.setupCallback = callback;
+  }
+
   private WPTTestLauncher(CharSequence script) {
     this.testHarness = script;
   }
@@ -60,6 +68,9 @@ public class WPTTestLauncher {
     scope.put("__testResultTracker", scope, tracker.getResultCallback(scope));
     scope.put("__testCompletionTracker", scope, tracker.getCompletionCallback(scope));
     scope.put("__testDefer", scope, new LambdaFunction(scope, "defer", 1, WPTTestLauncher::defer));
+    if (setupCallback != null) {
+      setupCallback.accept(cx, scope);
+    }
     return scope;
   }
 
@@ -73,22 +84,22 @@ public class WPTTestLauncher {
     return Undefined.instance;
   }
 
-  /*public void runTest(Context cx, String testPath) throws IOException {
-    String testScript = Files.readString(Path.of(TEST_BASE, testPath));
-    cx.evaluateString(scope, testScript, testPath, 1, null);
-  }*/
-
   public ResultTracker runScript(Context cx, CharSequence script) {
     var tracker = new ResultTracker();
     // Run each test suite in a separate scope to prevent cross-contamination.
-    Scriptable scope = initializeScope(cx, tracker);
+    var scope = initializeScope(cx, tracker);
     // For the harness to actually work, build the whole harness and our
     // test script into a big script and run it all together.
+    cx.evaluateString(scope, String.valueOf(testHarness) + script, "test.js", 1, null);
+    return tracker;
+  }
 
-    var testScript = new StringBuilder(testHarness);
-    testScript.append(script);
-    cx.evaluateString(scope, testScript.toString(), "test.js", 1, null);
-
+  public ResultTracker runFile(Context cx, String path) throws IOException {
+    var tracker = new ResultTracker();
+    var scope = initializeScope(cx, tracker);
+    var absPath = Path.of(TEST_BASE, path);
+    var script = ScriptFixer.fixScript(Files.readString(absPath));
+    cx.evaluateString(scope, testHarness + script, absPath.getFileName().toString(), 1, null);
     return tracker;
   }
 }

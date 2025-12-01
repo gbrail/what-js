@@ -1,5 +1,7 @@
 module org.brail.jwhat.framework {
-  requires org.mozilla.rhino;
+  requires transitive org.mozilla.rhino;
 
   exports org.brail.jwhat.framework;
+
+  opens org.brail.jwhat.framework;
 }
