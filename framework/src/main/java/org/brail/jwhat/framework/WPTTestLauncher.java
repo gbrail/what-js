@@ -4,8 +4,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
 import java.util.function.BiConsumer;
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.Function;
@@ -101,5 +105,42 @@ public class WPTTestLauncher {
     var script = ScriptFixer.fixScript(Files.readString(absPath));
     cx.evaluateString(scope, testHarness + script, absPath.getFileName().toString(), 1, null);
     return tracker;
+  }
+
+  public static Object[] findTests(String path) {
+    return findTests(path, new String[] {});
+  }
+
+  public static Object[] findTests(String path, String[] exclusions) {
+    var base = Path.of(TEST_BASE, path);
+    ArrayList<Object> results = new ArrayList<>();
+    try {
+      Files.walkFileTree(
+          base,
+          new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult visitFile(Path p, BasicFileAttributes attrs) {
+              if (p.toFile().isFile()) {
+                var name = p.toString();
+                if (name.endsWith(".any.js") && !isExcluded(name, exclusions)) {
+                  results.add(p.toString());
+                }
+              }
+              return FileVisitResult.CONTINUE;
+            }
+          });
+    } catch (IOException e) {
+      throw new AssertionError(e);
+    }
+    return results.toArray();
+  }
+
+  private static boolean isExcluded(String name, String[] exclusions) {
+    for (String ex : exclusions) {
+      if (name.contains(ex)) {
+        return true;
+      }
+    }
+    return false;
   }
 }

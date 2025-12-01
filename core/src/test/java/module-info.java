@@ -4,5 +4,5 @@ module org.brail.jwhat.core.tests {
   requires org.mozilla.rhino;
   requires org.junit.jupiter.params;
 
-  exports org.brail.jwhat.url.tests;
+  exports org.brail.jwhat.core.tests;
 }

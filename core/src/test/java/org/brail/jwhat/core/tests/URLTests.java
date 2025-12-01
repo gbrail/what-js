@@ -1,4 +1,4 @@
-package org.brail.jwhat.url.tests;
+package org.brail.jwhat.core.tests;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -26,17 +26,7 @@ public class URLTests {
   }
 
   public static Object[] getTestScripts() {
-    return new Object[] {
-      "url/historical.any.js",
-      "url/url-constructor.any.js",
-      "url/url-origin.any.js",
-      "url/url-searchparams.any.js",
-      "url/url-setters.any.js",
-      "url/url-setters-stripping.any.js",
-      "url/url-statics-canparse.any.js",
-      "url/url-statics-parse.any.js",
-      "url/url-tojson.any.js",
-    };
+    return WPTTestLauncher.findTests("url");
   }
 
   @ParameterizedTest
