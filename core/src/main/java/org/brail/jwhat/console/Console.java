@@ -20,107 +20,167 @@ public class Console extends ScriptableObject {
     ERROR
   }
 
-  private final Printer printer = new StdoutPrinter();
+  private static final Duration FIVE_MINUTES = Duration.ofMinutes(5);
+  private static final Duration FIVE_SECONDS = Duration.ofSeconds(5);
+
+  private final Printer printer;
   private final ConcurrentHashMap<String, Integer> counts = new ConcurrentHashMap<>();
   private final ConcurrentHashMap<String, Instant> timers = new ConcurrentHashMap<>();
 
-  public static void init(Context cx, Scriptable scope) {
-    Console c = new Console();
-    c.setParentScope(scope);
-    c.setPrototype(cx.newObject(scope));
-    c.defineProperty(
+  public static class Builder {
+    private Printer printer = null;
+
+    private Builder() {}
+
+    public Builder printer(Printer printer) {
+      this.printer = printer;
+      return this;
+    }
+
+    public void install(Context cx, Scriptable scope) {
+      if (printer == null) {
+        printer = new StdoutPrinter();
+      }
+      var c = new Console(printer);
+      c.init(cx, scope);
+    }
+  }
+
+  private Console(Printer printer) {
+    this.printer = printer;
+  }
+
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  public void init(Context cx, Scriptable scope) {
+    setParentScope(scope);
+    setPrototype(cx.newObject(scope));
+    defineProperty(
         SymbolKey.TO_STRING_TAG, "console", ScriptableObject.DONTENUM | ScriptableObject.READONLY);
-    c.defineProperty(
+    defineProperty(
+        "assert",
+        new LambdaFunction(
+            this,
+            "assert",
+            1,
+            (Context lcx, Scriptable ls, Scriptable thisObj, Object[] args) -> assertImpl(args)),
+        ScriptableObject.DONTENUM);
+    defineProperty(
         "debug",
         new LambdaFunction(
-            c,
+            this,
             "debug",
             1,
             (Context lcx, Scriptable ls, Scriptable thisObj, Object[] args) ->
-                c.logImpl(Level.DEBUG, args)),
+                logImpl("debug", args)),
         ScriptableObject.DONTENUM);
-    c.defineProperty(
+    defineProperty(
         "error",
         new LambdaFunction(
-            c,
+            this,
             "error",
             1,
             (Context lcx, Scriptable ls, Scriptable thisObj, Object[] args) ->
-                c.logImpl(Level.ERROR, args)),
+                logImpl("error", args)),
         ScriptableObject.DONTENUM);
-    c.defineProperty(
+    defineProperty(
         "info",
         new LambdaFunction(
-            c,
+            this,
             "info",
             1,
             (Context lcx, Scriptable ls, Scriptable thisObj, Object[] args) ->
-                c.logImpl(Level.INFO, args)),
+                logImpl("info", args)),
         ScriptableObject.DONTENUM);
-    c.defineProperty(
+    defineProperty(
         "log",
         new LambdaFunction(
-            c,
+            this,
             "log",
             1,
             (Context lcx, Scriptable ls, Scriptable thisObj, Object[] args) ->
-                c.logImpl(Level.LOG, args)),
+                logImpl("log", args)),
         ScriptableObject.DONTENUM);
-    c.defineProperty(
+    defineProperty(
         "warn",
         new LambdaFunction(
-            c,
+            this,
             "warn",
             1,
             (Context lcx, Scriptable ls, Scriptable thisObj, Object[] args) ->
-                c.logImpl(Level.WARN, args)),
+                logImpl("warn", args)),
         ScriptableObject.DONTENUM);
-    c.defineProperty(
+    defineProperty(
         "count",
         new LambdaFunction(
-            c,
+            this,
             "count",
             1,
-            (Context lcx, Scriptable ls, Scriptable thisObj, Object[] args) -> c.count(args)),
+            (Context lcx, Scriptable ls, Scriptable thisObj, Object[] args) -> count(args)),
         ScriptableObject.DONTENUM);
-    c.defineProperty(
+    defineProperty(
         "countReset",
         new LambdaFunction(
-            c,
+            this,
             "countReset",
             1,
-            (Context lcx, Scriptable ls, Scriptable thisObj, Object[] args) -> c.countReset(args)),
+            (Context lcx, Scriptable ls, Scriptable thisObj, Object[] args) -> countReset(args)),
         ScriptableObject.DONTENUM);
-    c.defineProperty(
+    defineProperty(
         "time",
         new LambdaFunction(
-            c,
+            this,
             "time",
             1,
-            (Context lcx, Scriptable ls, Scriptable thisObj, Object[] args) -> c.time(args)),
+            (Context lcx, Scriptable ls, Scriptable thisObj, Object[] args) -> time(args)),
         ScriptableObject.DONTENUM);
-    c.defineProperty(
+    defineProperty(
         "timeLog",
         new LambdaFunction(
-            c,
+            this,
             "timeLog",
             1,
-            (Context lcx, Scriptable ls, Scriptable thisObj, Object[] args) -> c.timeLog(args)),
+            (Context lcx, Scriptable ls, Scriptable thisObj, Object[] args) -> timeLog(args)),
         ScriptableObject.DONTENUM);
-    c.defineProperty(
+    defineProperty(
         "timeEnd",
         new LambdaFunction(
-            c,
+            this,
             "timeEnd",
             1,
-            (Context lcx, Scriptable ls, Scriptable thisObj, Object[] args) -> c.timeEnd(args)),
+            (Context lcx, Scriptable ls, Scriptable thisObj, Object[] args) -> timeEnd(args)),
         ScriptableObject.DONTENUM);
-    ScriptableObject.defineProperty(scope, "console", c, ScriptableObject.DONTENUM);
+    ScriptableObject.defineProperty(scope, "console", this, ScriptableObject.DONTENUM);
   }
 
   @Override
   public String getClassName() {
     return "console";
+  }
+
+  private Object assertImpl(Object[] args) {
+    if (args.length > 0) {
+      if (!ScriptRuntime.toBoolean(args[0])) {
+        if (args.length == 1) {
+          logString("assert", "assertion failed");
+        } else {
+          Object[] logArgs;
+          if (args[1] instanceof CharSequence) {
+            logArgs = new Object[args.length - 1];
+            System.arraycopy(args, 1, logArgs, 0, logArgs.length);
+            logArgs[0] = "assertion failed: " + logArgs[0];
+          } else {
+            logArgs = new Object[args.length];
+            System.arraycopy(args, 1, logArgs, 1, args.length - 1);
+            logArgs[0] = "assertion failed";
+          }
+          logImpl("assert", logArgs);
+        }
+      }
+    }
+    return Undefined.instance;
   }
 
   private Object count(Object[] args) {
@@ -135,7 +195,7 @@ public class Console extends ScriptableObject {
                 }
                 return oldVal + 1;
               });
-      logString(Level.INFO, label + ": " + newVal);
+      logString("count", label + ": " + newVal);
     }
     return Undefined.instance;
   }
@@ -144,7 +204,7 @@ public class Console extends ScriptableObject {
     if (args.length > 0) {
       String label = ScriptRuntime.toString(args[0]);
       if (counts.remove(label) == null) {
-        logString(Level.WARN, label + ": not found");
+        logString("warn", label + ": not found");
       }
     }
     return Undefined.instance;
@@ -153,8 +213,8 @@ public class Console extends ScriptableObject {
   private Object time(Object[] args) {
     if (args.length > 0) {
       String label = ScriptRuntime.toString(args[0]);
-      if (timers.computeIfAbsent(label, (k) -> Instant.now()) != null) {
-        logString(Level.WARN, label + ": already exists");
+      if (timers.putIfAbsent(label, Instant.now()) != null) {
+        logString("warn", label + ": already exists");
       }
     }
     return Undefined.instance;
@@ -166,13 +226,17 @@ public class Console extends ScriptableObject {
       var start = timers.get(label);
       if (start != null) {
         var d = Duration.between(start, Instant.now());
-        String msg = label + ": " + d;
-        Object[] logArgs = new Object[args.length + 1];
-        logArgs[0] = msg;
-        System.arraycopy(args, 0, logArgs, 1, args.length);
-        logImpl(Level.LOG, logArgs);
+        String msg = label + ": " + formatDuration(d);
+        if (args.length == 1) {
+          logString("timeLog", msg);
+        } else {
+          Object[] logArgs = new Object[args.length];
+          System.arraycopy(args, 1, logArgs, 1, args.length - 1);
+          logArgs[0] = msg;
+          logImpl("timeLog", logArgs);
+        }
       } else {
-        logString(Level.WARN, label + ": does not exist");
+        logString("warn", label + ": not found");
       }
     }
     return Undefined.instance;
@@ -184,27 +248,52 @@ public class Console extends ScriptableObject {
       var start = timers.remove(label);
       if (start != null) {
         var d = Duration.between(start, Instant.now());
-        logString(Level.INFO, label + ": " + d);
+        logString("timeEnd", label + ": " + formatDuration(d));
       } else {
-        logString(Level.WARN, label + ": does not exist");
+        logString("warn", label + ": not found");
       }
     }
     return Undefined.instance;
   }
 
-  private Object logImpl(Level level, Object[] args) {
+  private Object logImpl(String kind, Object[] args) {
     if (args.length > 0) {
+      var level = mapLevel(kind);
       if (args.length == 1) {
-        printer.print(level, Formatter.formatFormatString(args[0]));
+        printer.print(level, kind, Formatter.formatFormatString(args[0]));
       } else {
         var r = Formatter.format(args);
-        printer.print(level, r.getFormatted(), r.getRemaining());
+        printer.print(level, kind, r.getFormatted(), r.getRemaining());
       }
     }
     return Undefined.instance;
   }
 
-  private void logString(Level level, String msg) {
-    printer.print(level, msg);
+  private void logString(String kind, String msg) {
+    var level = mapLevel(kind);
+    printer.print(level, kind, msg);
+  }
+
+  private static String formatDuration(Duration d) {
+    if (d.compareTo(FIVE_MINUTES) > 0) {
+      double minutes = d.getSeconds() / 60.0 + (d.getNano() / 1_000_000_000.0 / 60.0);
+      return String.format("%.3fmin", minutes);
+    }
+    if (d.compareTo(FIVE_SECONDS) > 0) {
+      double secs = d.getSeconds() + (d.getNano() / 1_000_000_000.0);
+      return String.format("%.3fs", secs);
+    }
+    double millis = d.toNanos() / 1_000_000.0;
+    return String.format("%.3fms", millis);
+  }
+
+  private static Level mapLevel(String kind) {
+    return switch (kind) {
+      case "debug" -> Level.DEBUG;
+      case "error", "assert" -> Level.ERROR;
+      case "info", "count", "timeEnd" -> Level.INFO;
+      case "warn" -> Level.WARN;
+      default -> Level.LOG;
+    };
   }
 }

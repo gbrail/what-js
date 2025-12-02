@@ -1,6 +1,8 @@
 package org.brail.jwhat.cli;
 
 import java.io.IOException;
+import org.brail.jwhat.console.Console;
+import org.jline.reader.EndOfFileException;
 import org.jline.reader.LineReaderBuilder;
 import org.jline.terminal.TerminalBuilder;
 import org.mozilla.javascript.Context;
@@ -10,13 +12,21 @@ import org.mozilla.javascript.ScriptRuntime;
 public class CLI {
   public static void main(String[] args) {
     try (Context cx = Context.enter()) {
-      var scope = cx.initStandardObjects();
-
       var terminal = TerminalBuilder.builder().system(true).build();
       var reader = LineReaderBuilder.builder().terminal(terminal).build();
+      var writer = terminal.writer();
+
+      var scope = cx.initStandardObjects();
+      Console.builder().printer(new ConsolePrinter(writer)).install(cx, scope);
 
       while (true) {
-        String line = reader.readLine("> ");
+        String line;
+        try {
+          line = reader.readLine("> ");
+        } catch (EndOfFileException e) {
+          // Exit cleanly on control-D
+          break;
+        }
 
         if ("exit".equalsIgnoreCase(line)) {
           break;
@@ -24,14 +34,13 @@ public class CLI {
 
         try {
           Object result = cx.evaluateString(scope, line, "CLI", 1, null);
-          terminal.writer().println(ScriptRuntime.toString(result));
+          writer.println(ScriptRuntime.toString(result));
         } catch (RhinoException e) {
-          terminal.writer().println(e);
-          terminal.writer().print(e.getScriptStackTrace());
+          writer.println(e);
+          writer.print(e.getScriptStackTrace());
         }
       }
 
-      terminal.writer().println("Goodbye!");
       terminal.close();
 
     } catch (IOException e) {

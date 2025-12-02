@@ -2,7 +2,7 @@ package org.brail.jwhat.console;
 
 public class StdoutPrinter implements Printer {
   @Override
-  public void print(Console.Level level, String message, Object... args) {
+  public void print(Console.Level level, String kind, String message, Object... args) {
     if (args.length == 0) {
       System.out.println(message);
     } else {
