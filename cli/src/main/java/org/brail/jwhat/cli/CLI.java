@@ -2,6 +2,7 @@ package org.brail.jwhat.cli;
 
 import java.io.IOException;
 import org.brail.jwhat.console.Console;
+import org.brail.jwhat.url.URL;
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.LineReaderBuilder;
 import org.jline.terminal.TerminalBuilder;
@@ -18,6 +19,7 @@ public class CLI {
 
       var scope = cx.initStandardObjects();
       Console.builder().printer(new ConsolePrinter(writer)).install(cx, scope);
+      URL.init(cx, scope);
 
       while (true) {
         String line;

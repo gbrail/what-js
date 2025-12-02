@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import org.brail.jwhat.framework.WPTTestLauncher;
+import org.brail.jwhat.url.URL;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -18,6 +19,7 @@ public class URLTests {
   public static void init() throws IOException {
     cx = Context.enter();
     launcher = WPTTestLauncher.newLauncher();
+    launcher.setSetupCallback(URL::init);
   }
 
   @AfterAll
