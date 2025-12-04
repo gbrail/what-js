@@ -34,8 +34,9 @@ public class URL extends ScriptableObject {
     c.definePrototypeProperty(cx, "port", URL::getPort, URL::setPort);
     c.definePrototypeProperty(cx, "protocol", URL::getProtocol, URL::setProtocol);
     c.definePrototypeProperty(cx, "username", URL::getUsername, URL::setUsername);
-    c.definePrototypeProperty(cx, "origin", URL::getOrigin, null);
+    c.definePrototypeProperty(cx, "origin", URL::getOrigin);
     ScriptableObject.defineProperty(scope, "URL", c, ScriptableObject.DONTENUM);
+    URLSearchParams.init(cx, scope);
   }
 
   @Override
