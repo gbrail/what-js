@@ -25,7 +25,7 @@ public class SmokeTest {
   }
 
   @Test
-  public void basicTest() {
+  public void basicTest() throws IOException {
     var results =
         launcher.runScript(
             cx,
@@ -45,7 +45,7 @@ public class SmokeTest {
   }
 
   @Test
-  public void failingTest() {
+  public void failingTest() throws IOException {
     var results =
         launcher.runScript(
             cx,
@@ -61,7 +61,7 @@ public class SmokeTest {
   }
 
   @Test
-  public void basicPromiseTest() {
+  public void basicPromiseTest() throws IOException {
     var results =
         launcher.runScript(
             cx,
@@ -81,7 +81,7 @@ public class SmokeTest {
   }
 
   @Test
-  public void failingPromiseTest() {
+  public void failingPromiseTest() throws IOException {
     var results =
         launcher.runScript(
             cx,
@@ -101,7 +101,7 @@ public class SmokeTest {
   }
 
   @Test
-  public void deferredPromiseTest() {
+  public void deferredPromiseTest() throws IOException {
     var results =
         launcher.runScript(
             cx,
@@ -117,7 +117,7 @@ public class SmokeTest {
   }
 
   @Test
-  public void deferredPromiseFailureTest() {
+  public void deferredPromiseFailureTest() throws IOException {
     var results =
         launcher.runScript(
             cx,
@@ -130,5 +130,46 @@ public class SmokeTest {
               """);
     assertFalse(results.success());
     assertEquals(1, results.getResults().size());
+  }
+
+  @Test
+  public void fetchResourceTest() throws IOException {
+    var results =
+        launcher.runScript(
+            cx,
+            """
+                            promise_test(() => {
+                              return new Promise((resolve, reject) => {
+                                fetch("src/main/resources/test.json")
+                                  .then((res) => res.json())
+                                  .then((o) => {
+                                    assert_equals(o.foo, 123);
+                                    resolve();
+                                  });
+                              });
+                            });
+                            """);
+    assertTrue(results.success(), results.getFailureReason());
+  }
+
+  @Test
+  public void fetchRelativeResourceTest() throws IOException {
+    var results =
+        launcher.runScript(
+            cx,
+            """
+                            promise_test(() => {
+                              __setFetchBase('src');
+                              return new Promise((resolve, reject) => {
+                                fetch("main/resources/test.json")
+                                  .then((res) => res.json())
+                                  .then((o) => {
+                                    assert_equals(o.foo, 123);
+                                    resolve();
+                                  });
+                              });
+                            });
+                            """);
+    assertTrue(results.success(), results.getFailureReason());
   }
 }

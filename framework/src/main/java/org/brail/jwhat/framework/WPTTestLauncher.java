@@ -65,8 +65,9 @@ public class WPTTestLauncher {
     this.testHarness = script;
   }
 
-  private Scriptable initializeScope(Context cx, ResultTracker tracker) {
+  private Scriptable initializeScope(Context cx, ResultTracker tracker) throws IOException {
     Scriptable scope = cx.initStandardObjects();
+    MinimalFetch.init(cx, scope);
     scope.put("self", scope, scope);
     scope.put("console", scope, MinimalConsole.init(cx, scope));
     scope.put("__testResultTracker", scope, tracker.getResultCallback(scope));
@@ -88,7 +89,7 @@ public class WPTTestLauncher {
     return Undefined.instance;
   }
 
-  public ResultTracker runScript(Context cx, CharSequence script) {
+  public ResultTracker runScript(Context cx, CharSequence script) throws IOException {
     var tracker = new ResultTracker();
     // Run each test suite in a separate scope to prevent cross-contamination.
     var scope = initializeScope(cx, tracker);
@@ -103,6 +104,8 @@ public class WPTTestLauncher {
     var scope = initializeScope(cx, tracker);
     var absPath = Path.of(TEST_BASE, path);
     var script = ScriptFixer.fixScript(Files.readString(absPath));
+    var setBase = (Function) scope.get("__setFetchBase", scope);
+    setBase.call(cx, scope, null, new Object[] {absPath.getParent().toString()});
     cx.evaluateString(scope, testHarness + script, absPath.getFileName().toString(), 1, null);
     return tracker;
   }
