@@ -1,9 +1,6 @@
 package org.brail.jwhat.framework;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -21,29 +18,14 @@ import org.mozilla.javascript.Undefined;
 public class WPTTestLauncher {
   private static final String TEST_BASE = "../wpt";
 
-  private final CharSequence testHarness;
+  private final StringBuilder testHarness;
   private BiConsumer<Context, Scriptable> setupCallback;
 
   public static WPTTestLauncher newLauncher() throws IOException {
     // Build a test script that includes the standard harness and all of our
     // code to link it to Java.
-    StringBuilder completeTestScript = new StringBuilder();
-
-    try (InputStream in =
-        WPTTestLauncher.class
-            .getClassLoader()
-            .getResourceAsStream("org/brail/jwhat/framework/testharness.js")) {
-      if (in == null) {
-        throw new IOException("Could not find testharness.js resource");
-      }
-      try (InputStreamReader rdr = new InputStreamReader(in, StandardCharsets.UTF_8)) {
-        char[] buffer = new char[4096];
-        int bytesRead;
-        while ((bytesRead = rdr.read(buffer)) != -1) {
-          completeTestScript.append(buffer, 0, bytesRead);
-        }
-      }
-    }
+    String harness = Utils.readResource("org/brail/jwhat/framework/testharness.js");
+    StringBuilder completeTestScript = new StringBuilder(harness);
 
     completeTestScript.append(
         """
@@ -61,7 +43,16 @@ public class WPTTestLauncher {
     this.setupCallback = callback;
   }
 
-  private WPTTestLauncher(CharSequence script) {
+  public void addScript(String path) throws IOException {
+    Path p = Path.of(TEST_BASE, path);
+    testHarness.append(Files.readString(p));
+  }
+
+  public void addResource(String path) throws IOException {
+    testHarness.append(Utils.readResource("org/brail/jwhat/framework/" + path));
+  }
+
+  private WPTTestLauncher(StringBuilder script) {
     this.testHarness = script;
   }
 

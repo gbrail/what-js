@@ -1,8 +1,6 @@
 package org.brail.jwhat.framework;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -17,23 +15,14 @@ import org.mozilla.javascript.Undefined;
 public class MinimalFetch {
   public static void init(Context cx, Scriptable scope) throws IOException {
     var loadFunc = new LambdaFunction(scope, "load", 1, MinimalFetch::load);
-    try (InputStream in =
-        MinimalFetch.class
-            .getClassLoader()
-            .getResourceAsStream("org/brail/jwhat/framework/mini-fetch.js")) {
-      if (in == null) {
-        throw new IOException("Could not find mini-fetch.js resource");
-      }
-      try (InputStreamReader rdr = new InputStreamReader(in, StandardCharsets.UTF_8)) {
-        var exports = (Scriptable) cx.evaluateReader(scope, rdr, "mini-fetch.js", 1, null);
-        var loadFetch = (Function) exports.get("loadFetch", exports);
-        var fetchFunc = (Function) loadFetch.call(cx, scope, null, new Object[] {loadFunc});
-        ScriptableObject.defineProperty(scope, "fetch", fetchFunc, ScriptableObject.DONTENUM);
-        var setBaseFunc = (Function) exports.get("setBase", exports);
-        ScriptableObject.defineProperty(
-            scope, "__setFetchBase", setBaseFunc, ScriptableObject.DONTENUM);
-      }
-    }
+    String miniFetch = Utils.readResource("org/brail/jwhat/framework/mini-fetch.js");
+    var exports = (Scriptable) cx.evaluateString(scope, miniFetch, "mini-fetch.js", 1, null);
+    var loadFetch = (Function) exports.get("loadFetch", exports);
+    var fetchFunc = (Function) loadFetch.call(cx, scope, null, new Object[] {loadFunc});
+    ScriptableObject.defineProperty(scope, "fetch", fetchFunc, ScriptableObject.DONTENUM);
+    var setBaseFunc = (Function) exports.get("setBase", exports);
+    ScriptableObject.defineProperty(
+        scope, "__setFetchBase", setBaseFunc, ScriptableObject.DONTENUM);
   }
 
   private static Object load(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {

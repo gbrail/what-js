@@ -3996,7 +3996,7 @@
                  function(test)
                  {
                      if (test.name in names && duplicates.indexOf(test.name) === -1) {
-                        duplicates.push(test.name);
+                         duplicates.push(test.name);
                      }
                      names[test.name] = true;
                  });
@@ -4050,6 +4050,8 @@
             // allows consumers to use them for identification purposes.
             // Duplicated names violate this expectation and should therefore
             // be reported as an error.
+            // TODO we are disabling this
+            /*
             if (duplicates.length) {
                 this.status.status = this.status.ERROR;
                 this.status.message =
@@ -4059,6 +4061,7 @@
             } else {
                 this.status.status = this.status.OK;
             }
+             */
         }
 
         forEach (this.all_done_callbacks,

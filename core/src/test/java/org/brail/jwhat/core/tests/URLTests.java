@@ -20,6 +20,7 @@ public class URLTests {
     cx = Context.enter();
     launcher = WPTTestLauncher.newLauncher();
     launcher.setSetupCallback(URL::init);
+    launcher.addResource("subset-tests-by-key.js");
   }
 
   @AfterAll

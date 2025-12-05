@@ -1,26 +1,23 @@
 package org.brail.jwhat.url;
 
-import java.net.MalformedURLException;
-import java.net.URISyntaxException;
-import java.util.Optional;
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.LambdaConstructor;
+import org.mozilla.javascript.RhinoException;
 import org.mozilla.javascript.ScriptRuntime;
 import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
+import org.mozilla.javascript.Undefined;
 
 public class URL extends ScriptableObject {
-  private String origin;
+  private Object origin;
   private String protocol;
   private String username;
   private String password;
   private String host;
-  private String hostname;
   private String port;
   private String pathname;
+  private String search;
   private String hash;
-
-  // TODO search params
 
   public static void init(Context cx, Scriptable scope) {
     var c = new LambdaConstructor(scope, "URL", 1, URL::constructor);
@@ -34,7 +31,9 @@ public class URL extends ScriptableObject {
     c.definePrototypeProperty(cx, "port", URL::getPort, URL::setPort);
     c.definePrototypeProperty(cx, "protocol", URL::getProtocol, URL::setProtocol);
     c.definePrototypeProperty(cx, "username", URL::getUsername, URL::setUsername);
+    c.definePrototypeProperty(cx, "search", URL::getSearch, URL::setSearch);
     c.definePrototypeProperty(cx, "origin", URL::getOrigin);
+
     ScriptableObject.defineProperty(scope, "URL", c, ScriptableObject.DONTENUM);
     URLSearchParams.init(cx, scope);
   }
@@ -47,71 +46,131 @@ public class URL extends ScriptableObject {
   private URL() {}
 
   private static Scriptable constructor(Context cx, Scriptable scope, Object[] args) {
-    String url = (args.length > 0 ? ScriptRuntime.toString(args[0]) : "");
-    String base = (args.length > 1 ? ScriptRuntime.toString(args[1]) : null);
-    var r = parseURL(url, base);
-    if (r.isEmpty()) {
-      throw ScriptRuntime.typeError("Invalid URL: " + url);
-    }
+    String url = requiredArg(args, 0, "url");
+    String base = optionalArg(args, 1);
+    var parser = parseURL(url, base);
     var u = new URL();
-    u.fillState(r.get());
+    u.fillState(cx, scope, parser);
     return u;
   }
 
   private static Object parse(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
-    String url = (args.length > 0 ? ScriptRuntime.toString(args[0]) : "");
-    String base = (args.length > 1 ? ScriptRuntime.toString(args[1]) : null);
-    var r = parseURL(url, base);
-    if (r.isEmpty()) {
-      return null;
-    }
+    String url = requiredArg(args, 0, "url");
+    String base = optionalArg(args, 1);
+    var parser = parseURL(url, base);
     var u = new URL();
     // TODO set prototype?
     u.setParentScope(scope);
-    u.fillState(r.get());
+    u.fillState(cx, scope, parser);
     return u;
   }
 
-  private static Object canParse(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
-    String url = (args.length > 0 ? ScriptRuntime.toString(args[0]) : "");
-    String base = (args.length > 1 ? ScriptRuntime.toString(args[1]) : null);
-    var r = parseURL(url, base);
-    return r.isPresent();
-  }
-
-  private void fillState(java.net.URL parsed) {
-    protocol = parsed.getProtocol() + ":";
-    hash = parsed.getRef() == null ? "" : "#" + parsed.getRef();
-    pathname = parsed.getPath() == null ? "" : parsed.getPath();
-    port = parsed.getPort() == -1 ? "" : String.valueOf(parsed.getPort());
-    hostname = parsed.getHost();
-    host = hostname + (port.isEmpty() ? "" : ":" + port);
-    String userInfo = parsed.getUserInfo();
-    if (userInfo != null && !userInfo.isEmpty()) {
-      String[] parts = userInfo.split(":", 2);
-      username = parts[0];
-      password = parts.length > 1 ? parts[1] : "";
-    } else {
-      username = "";
-      password = "";
-    }
-    origin = parsed.getProtocol() + "://" + host;
-  }
-
-  private static Optional<java.net.URL> parseURL(String url, String base) {
+  private static URLParser parseURL(String url, String base) {
+    URLParser baseParser = null;
     if (base != null) {
-      try {
-        var baseUrl = new java.net.URI(base);
-        return Optional.of(baseUrl.resolve(url).toURL());
-      } catch (URISyntaxException | MalformedURLException | IllegalArgumentException ue) {
-        return Optional.empty();
+      baseParser = new URLParser(base, null);
+      if (baseParser.isFailure()) {
+        throw getParseFailure(baseParser);
       }
     }
-    try {
-      return Optional.of(new java.net.URI(url).toURL());
-    } catch (URISyntaxException | MalformedURLException | IllegalArgumentException ue) {
-      return Optional.empty();
+
+    URLParser parser = new URLParser(url, baseParser);
+    if (parser.isFailure()) {
+      throw getParseFailure(parser);
     }
+    return parser;
+  }
+
+  private static RhinoException getParseFailure(URLParser parser) {
+    assert parser.getErrors().isPresent();
+    throw ScriptRuntime.typeError("Invalid URL: " + parser.getErrors().get());
+  }
+
+  private static Object canParse(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+    String url = optionalArg(args, 0);
+    String base = optionalArg(args, 1);
+    if (url == null && base == null) {
+      return false;
+    }
+
+    URLParser baseParser = null;
+    if (base != null) {
+      baseParser = new URLParser(base, null);
+      if (baseParser.isFailure()) {
+        return false;
+      }
+    }
+
+    if (url != null) {
+      URLParser parser = new URLParser(url, baseParser);
+      if (parser.isFailure()) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private static String requiredArg(Object[] args, int p, String name) {
+    String val = optionalArg(args, p);
+    if (val == null) {
+      throw ScriptRuntime.typeError("The \"" + name + "\" argument must be supplied");
+    }
+    return val;
+  }
+
+  private static String optionalArg(Object[] args, int p) {
+    if (args.length > p) {
+      Object arg = args[p];
+      if (arg != null && !Undefined.isUndefined(arg)) {
+        return ScriptRuntime.toString(arg);
+      }
+    }
+    return null;
+  }
+
+  private void fillState(Context cx, Scriptable scope, URLParser parsed) {
+    // TODO href and toJSON
+    if (parsed.schemeHasOrigin()) {
+      origin = URL.makeTupleOrigin(cx, scope, parsed);
+    } else {
+      origin = null;
+    }
+    protocol = parsed.scheme + ':';
+    username = parsed.username;
+    password = parsed.password;
+    if (parsed.host == null) {
+      host = "";
+    } else if (parsed.port == null) {
+      host = parsed.host;
+    } else {
+      host = parsed.host + ':' + parsed.port;
+    }
+    if (parsed.port == null) {
+      port = "";
+    } else {
+      port = parsed.port;
+    }
+    // TODO URL path serialization
+    pathname = parsed.path;
+    if (parsed.query == null || parsed.query.isEmpty()) {
+      search = "";
+    } else {
+      search = '?' + parsed.query;
+    }
+    // TODO searchParams
+    if (parsed.fragment == null || parsed.fragment.isEmpty()) {
+      hash = "";
+    } else {
+      hash = '#' + parsed.fragment;
+    }
+  }
+
+  private static Scriptable makeTupleOrigin(Context cx, Scriptable scope, URLParser p) {
+    return cx.newArray(
+        scope,
+        new Object[] {
+          p.scheme, p.host, p.port, null,
+        });
   }
 
   private static URL realThis(Scriptable thisObj) {
@@ -134,6 +193,14 @@ public class URL extends ScriptableObject {
     // TODO rebuild the URL!
   }
 
+  private static Object getSearch(Scriptable scriptable) {
+    return realThis(scriptable).search;
+  }
+
+  private static void setSearch(Scriptable scriptable, Object o) {
+    // TODO rebuild the URL!
+  }
+
   private static Object getHost(Scriptable scriptable) {
     return realThis(scriptable).host;
   }
@@ -143,7 +210,7 @@ public class URL extends ScriptableObject {
   }
 
   private static Object getHostname(Scriptable scriptable) {
-    return realThis(scriptable).hostname;
+    return realThis(scriptable).host;
   }
 
   private static void setHostname(Scriptable scriptable, Object o) {
