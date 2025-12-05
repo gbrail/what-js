@@ -1,23 +1,27 @@
-package org.brail.jwhat.url;
+package org.brail.jwhat.core.impl;
 
+import java.net.Inet6Address;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
-class URLParser {
+public class URLParser {
   private static final Pattern TAB_NEWLINE = Pattern.compile("\\t\\r\\n");
   private static final Pattern COLON = Pattern.compile(":");
   private static final char EOF = Character.MAX_VALUE;
 
-  String scheme;
-  String path;
-  String query;
-  String fragment;
-  String username;
-  String password;
-  String host;
-  String port;
+  public String scheme = "";
+  public List<String> path = new ArrayList<>();
+  public StringBuilder opaquePath;
+  public String query;
+  public String fragment;
+  public String username = "";
+  public String password = "";
+  public String host;
+  public String port;
 
   private CharSequence input;
   private StringBuilder buf;
@@ -26,7 +30,6 @@ class URLParser {
   private boolean insideBrackets;
   private List<String> errors;
   private boolean special;
-  private boolean opaque;
   private boolean failed;
 
   private enum ParseState {
@@ -55,7 +58,7 @@ class URLParser {
   };
 
   /** Implement the "basic URL parser" from WhatWG Section 4. */
-  URLParser(CharSequence in, URLParser base) {
+  public URLParser(CharSequence in, URLParser base) {
     assert base == null || !base.isFailure();
     if (in == null || in.isEmpty()) {
       return;
@@ -65,7 +68,7 @@ class URLParser {
     resetBuffer();
     ParseState state = ParseState.SCHEME_START;
 
-    for (int p = 0; p <= input.length(); p++) {
+    for (p = 0; p <= input.length(); p++) {
       // Iterate one character at a time, but with an extra round-trip
       // with a special EOF "character" to support special processing.
       char c;
@@ -147,7 +150,7 @@ class URLParser {
   }
 
   /** Return if parsing failed and this URL can't be used. */
-  boolean isFailure() {
+  public boolean isFailure() {
     return failed;
   }
 
@@ -155,7 +158,7 @@ class URLParser {
    * Return the errors encountered during parsing. This may return errors if "isFailure" is false,
    * which means that the errors are non-fatal.
    */
-  Optional<String> getErrors() {
+  public Optional<String> getErrors() {
     if (errors == null || errors.isEmpty()) {
       return Optional.empty();
     }
@@ -163,7 +166,7 @@ class URLParser {
   }
 
   private ParseState schemeStartState(char c) {
-    if (isAlpha(c)) {
+    if (URLUtils.isAlpha(c)) {
       buf.append(Character.toLowerCase(c));
       return ParseState.SCHEME;
     }
@@ -173,7 +176,7 @@ class URLParser {
   }
 
   private ParseState schemeState(char c, URLParser base) {
-    if (isAlpha(c) || c == '+' || c == '-' || c == '.') {
+    if (URLUtils.isAlpha(c) || c == '+' || c == '-' || c == '.') {
       buf.append(Character.toLowerCase(c));
       return ParseState.SCHEME;
     }
@@ -181,7 +184,7 @@ class URLParser {
     if (c == ':') {
       scheme = buf.toString();
       resetBuffer();
-      special = isSpecialScheme(scheme);
+      special = URLUtils.isSpecialScheme(scheme);
       if ("file".equals(scheme)) {
         if (nextChar() != '/' || nextNextChar() != '/') {
           addError("special-scheme-missing-following-solidus");
@@ -200,19 +203,19 @@ class URLParser {
         p++;
         return ParseState.PATH_OR_AUTHORITY;
       } else {
-        path = "";
+        path = new ArrayList<>();
         return ParseState.OPAQUE_PATH;
       }
     }
 
-    // Otherwise, tart over with no scheme...
+    // Otherwise, start over with no scheme...
     resetBuffer();
     p = -1;
     return ParseState.NO_SCHEME;
   }
 
   private ParseState noSchemeState(char c, URLParser base) {
-    if (base == null || (base.opaque && c != '#')) {
+    if (base == null || (base.opaquePath != null && c != '#')) {
       addError("missing-scheme-non-relative-URL");
       return ParseState.FAILURE;
     }
@@ -256,7 +259,7 @@ class URLParser {
       password = base.password;
       host = base.host;
       port = base.port;
-      path = base.path;
+      path = new ArrayList<>(base.path);
       query = base.query;
       if (c == '?') {
         query = "";
@@ -267,7 +270,7 @@ class URLParser {
         return ParseState.FRAGMENT;
       }
       query = null;
-      // TODO: Shorten path, requires some parsing
+      shortenPath();
       p--;
       return ParseState.PATH;
     }
@@ -355,7 +358,7 @@ class URLParser {
         addError("host-missing");
         return ParseState.FAILURE;
       }
-      var h = decodeHost(buf, !isSpecialScheme(scheme));
+      var h = decodeHost(buf, !URLUtils.isSpecialScheme(scheme));
       if (h.isEmpty()) {
         addError("invalid-host");
         return ParseState.FAILURE;
@@ -375,7 +378,7 @@ class URLParser {
   }
 
   private ParseState portState(char c) {
-    if (isDigit(c)) {
+    if (URLUtils.isDigit(c)) {
       buf.append(c);
       return ParseState.PORT;
     }
@@ -413,7 +416,7 @@ class URLParser {
     }
     if (base != null && "file".equals(base.scheme)) {
       host = base.host;
-      path = base.path;
+      path = new ArrayList<>(base.path);
       query = base.query;
       if (c == '?') {
         query = "";
@@ -443,7 +446,7 @@ class URLParser {
     }
     if (base != null && "file".equals(base.scheme)) {
       host = base.host;
-      // TODO windows check
+      // TODO weird Windows path thing
     }
     p--;
     return ParseState.PATH;
@@ -476,10 +479,10 @@ class URLParser {
 
   private ParseState pathStartState(char c) {
     if (special) {
+      if (c == '\\') {
+        addError("invalid-reverse-solidus");
+      }
       if (c != '/' && c != '\\') {
-        if (c == '\\') {
-          addError("invalid-reverse-solidus");
-        }
         p--;
       }
       return ParseState.PATH;
@@ -492,8 +495,11 @@ class URLParser {
       fragment = "";
       return ParseState.FRAGMENT;
     }
-    if (c != EOF && c != '/') {
-      p--;
+    if (c != EOF) {
+      if (c != '/') {
+        p--;
+      }
+      return ParseState.PATH;
     }
     return ParseState.PATH_START;
   }
@@ -504,18 +510,19 @@ class URLParser {
         addError("invalid-reverse-solidus");
       }
       if ("..".contentEquals(buf)) {
-        // TODO shorten path
-        path = buf.toString();
-      } else if (".".contentEquals(buf) && c != '/' && !(special && c == '\\')) {
-        path = "";
-      } else {
-        if (path == null) {
-          path = buf.toString();
-        } else {
-          path = path + buf.toString();
+        shortenPath();
+        if (c != '/' && !(special && c == '\\')) {
+          path.add("");
         }
+      } else if (".".contentEquals(buf) && c != '/' && !(special && c == '\\')) {
+        path.add("");
+      } else if (!".".contentEquals(buf)) {
+        if ("file".equals(scheme) && path.isEmpty() && URLUtils.isWindowsDriveLetter(buf)) {
+          assert buf.length() == 2;
+          buf.setCharAt(1, ':');
+        }
+        path.add(buf.toString());
       }
-      // TODO windows drive letter
       resetBuffer();
       if (c == '?') {
         query = "";
@@ -527,10 +534,10 @@ class URLParser {
       }
     }
 
-    if (!isURLCodePoint(c) && c != '%') {
+    if (!URLUtils.isURLCodePoint(c) && c != '%') {
       addError("invalid-url-unit");
     }
-    if (c == '%' && (!isHexDigit(nextChar()) || !isHexDigit(nextNextChar()))) {
+    if (c == '%' && (!URLUtils.isHexDigit(nextChar()) || !URLUtils.isHexDigit(nextNextChar()))) {
       addError("invalid-url-unit");
     }
     // TODO percent-encoding
@@ -539,7 +546,6 @@ class URLParser {
   }
 
   private ParseState opaquePathState(char c) {
-    opaque = true;
     if (c == '?') {
       query = "";
       return ParseState.QUERY;
@@ -548,21 +554,24 @@ class URLParser {
       fragment = "";
       return ParseState.FRAGMENT;
     }
+    if (opaquePath == null) {
+      opaquePath = new StringBuilder();
+    }
     if (c == ' ') {
       if (nextChar() == '?' || nextChar() == '#') {
-        path += "%20";
+        opaquePath.append("%20");
       } else {
-        path += ' ';
+        opaquePath.append(' ');
       }
     } else if (c != EOF) {
-      if (!isURLCodePoint(c) && c != '%') {
+      if (!URLUtils.isURLCodePoint(c) && c != '%') {
         addError("invalid-url-unit");
       }
-      if (c == '%' && (!isHexDigit(nextChar()) || !isHexDigit(nextNextChar()))) {
+      if (c == '%' && (!URLUtils.isHexDigit(nextChar()) || !URLUtils.isHexDigit(nextNextChar()))) {
         addError("invalid-url-unit");
       }
       // TODO percent-encoding
-      path += c;
+      opaquePath.append(c);
     }
     return ParseState.OPAQUE_PATH;
   }
@@ -578,10 +587,10 @@ class URLParser {
       }
     }
     if (c != EOF) {
-      if (!isURLCodePoint(c) && c != '%') {
+      if (!URLUtils.isURLCodePoint(c) && c != '%') {
         addError("invalid-url-unit");
       }
-      if (c == '%' && (!isHexDigit(nextChar()) || !isHexDigit(nextNextChar()))) {
+      if (c == '%' && (URLUtils.isHexDigit(nextChar()) || !URLUtils.isHexDigit(nextNextChar()))) {
         addError("invalid-url-unit");
       }
       // TODO percent-encoding
@@ -591,10 +600,10 @@ class URLParser {
   }
 
   private ParseState fragmentState(char c) {
-    if (!isURLCodePoint(c) && c != '%') {
+    if (!URLUtils.isURLCodePoint(c) && c != '%') {
       addError("invalid-url-unit");
     }
-    if (c == '%' && (!isHexDigit(nextChar()) || !isHexDigit(nextNextChar()))) {
+    if (c == '%' && (!URLUtils.isHexDigit(nextChar()) || !URLUtils.isHexDigit(nextNextChar()))) {
       addError("invalid-url-unit");
     }
     // TODO percent-encoding
@@ -620,15 +629,49 @@ class URLParser {
     String[] p = COLON.split(b, 2);
     // TODO doesn't do percent-encoding as per "authority state" section
     username = p[0];
-    password = p.length > 1 ? p[1] : null;
+    password = p.length > 1 ? p[1] : "";
   }
 
   private Optional<String> decodeHost(CharSequence s, boolean isOpaque) {
-    // TODO host parsing in various ways
-    return Optional.of("HOST_NAME_HERE");
+    if (s.length() > 1 && s.charAt(0) == '[') {
+      if (s.charAt(s.length() - 1) != ']') {
+        addError("IPv6-unclosed-validation");
+        return Optional.empty();
+      }
+      return decodeIPv6(s.subSequence(1, s.length() - 1));
+    }
+    if (isOpaque) {
+      return decodeOpaqueHost(s);
+    }
+    String dec = URLUtils.percentDecode(s);
+    // TODO IPv4 address parsing
+    return Optional.of(dec);
   }
 
-  private Optional<Integer> decodePort(CharSequence s) {
+  private Optional<String> decodeIPv6(CharSequence s) {
+    // TODO replace with the real algorithm, since this may do a lookup
+    try {
+      var as = s.toString();
+      InetAddress addr = InetAddress.getByName(as);
+      if (addr instanceof Inet6Address && as.contains(":")) {
+        return Optional.of(addr.getHostAddress());
+      } else {
+        addError("IPv6-validation-failed");
+        return Optional.empty();
+      }
+    } catch (UnknownHostException e) {
+      addError("IPv6-validation-failed");
+      return Optional.empty();
+    }
+  }
+
+  private Optional<String> decodeOpaqueHost(CharSequence s) {
+    // TODO validate character set as shown in spec
+    // Perhaps add a "fail" mode to the URL decoder for this purpose
+    return Optional.of(URLUtils.percentEncode(s, URLUtils::isControlPEncode, false));
+  }
+
+  private static Optional<Integer> decodePort(CharSequence s) {
     try {
       int port = Integer.parseInt(s.toString());
       if (port >= 0 && port <= 65536) {
@@ -660,89 +703,20 @@ class URLParser {
     errors.add(msg);
   }
 
-  // ASCII stuff
-
-  private static boolean isDigit(char c) {
-    return c >= '0' && c <= '9';
-  }
-
-  private static boolean isUpperHexDigit(char c) {
-    return isDigit(c) || (c >= 'A' && c <= 'F');
-  }
-
-  private static boolean isLowerHexDigit(char c) {
-    return isDigit(c) || (c >= 'a' && c <= 'f');
-  }
-
-  private static boolean isHexDigit(char c) {
-    return isUpperHexDigit(c) || isLowerHexDigit(c);
-  }
-
-  private static boolean isUpperAlpha(char c) {
-    return c >= 'A' && c <= 'Z';
-  }
-
-  private static boolean isLowerAlpha(char c) {
-    return c >= 'a' && c <= 'z';
-  }
-
-  private static boolean isAlpha(char c) {
-    return isUpperAlpha(c) || isLowerAlpha(c);
-  }
-
-  private static boolean isAlphanumeric(char c) {
-    return isAlpha(c) || isDigit(c);
-  }
-
-  private static boolean isControl(char c) {
-    return c <= 0x1f;
-  }
-
-  private static boolean isSpecialScheme(String s) {
-    return switch (s) {
-      case "ftp", "file", "http", "https", "ws", "wss" -> true;
-      default -> false;
-    };
-  }
-
-  boolean schemeHasOrigin() {
-    if (scheme == null) {
-      return false;
+  private void shortenPath() {
+    // assert path is not opaque (by length?)
+    if (path.size() == 1
+        && "file".equals(scheme)
+        && URLUtils.isNormalizedWindowsDriveLetter(path.get(0))) {
+      return;
     }
-    return switch (scheme) {
-      case "ftp", "http", "https", "ws", "wss" -> true;
-      default -> false;
-    };
+    if (!path.isEmpty()) {
+      path.remove(path.size() - 1);
+    }
   }
 
-  private static boolean isURLCodePoint(char c) {
-    // Does not account for UTF-8, but we go one char at a time
-    if (isAlphanumeric(c)) {
-      return true;
-    }
-    return switch (c) {
-      case '!',
-              '$',
-              '&',
-              '\'',
-              '(',
-              ')',
-              '*',
-              '+',
-              ',',
-              '-',
-              '.',
-              '/',
-              ':',
-              ';',
-              '=',
-              '?',
-              '@',
-              '_',
-              '~' ->
-          true;
-      default -> false;
-    };
+  public boolean schemeHasOrigin() {
+    return URLUtils.schemeHasOrigin(scheme);
   }
 
   public static void main(String[] args) {

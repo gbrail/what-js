@@ -1,5 +1,6 @@
 package org.brail.jwhat.url;
 
+import org.brail.jwhat.core.impl.URLParser;
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.LambdaConstructor;
 import org.mozilla.javascript.RhinoException;
@@ -18,6 +19,7 @@ public class URL extends ScriptableObject {
   private String pathname;
   private String search;
   private String hash;
+  private String href;
 
   public static void init(Context cx, Scriptable scope) {
     var c = new LambdaConstructor(scope, "URL", 1, URL::constructor);
@@ -32,6 +34,8 @@ public class URL extends ScriptableObject {
     c.definePrototypeProperty(cx, "protocol", URL::getProtocol, URL::setProtocol);
     c.definePrototypeProperty(cx, "username", URL::getUsername, URL::setUsername);
     c.definePrototypeProperty(cx, "search", URL::getSearch, URL::setSearch);
+    c.definePrototypeProperty(cx, "href", URL::getHref, URL::setHref);
+    c.definePrototypeMethod(scope, "toJSON", 0, URL::toJSON);
     c.definePrototypeProperty(cx, "origin", URL::getOrigin);
 
     ScriptableObject.defineProperty(scope, "URL", c, ScriptableObject.DONTENUM);
@@ -150,8 +154,7 @@ public class URL extends ScriptableObject {
     } else {
       port = parsed.port;
     }
-    // TODO URL path serialization
-    pathname = parsed.path;
+    pathname = serializePath(parsed);
     if (parsed.query == null || parsed.query.isEmpty()) {
       search = "";
     } else {
@@ -163,6 +166,8 @@ public class URL extends ScriptableObject {
     } else {
       hash = '#' + parsed.fragment;
     }
+    // Needs to happen after everything above is set
+    href = serialize(parsed);
   }
 
   private static Scriptable makeTupleOrigin(Context cx, Scriptable scope, URLParser p) {
@@ -171,6 +176,47 @@ public class URL extends ScriptableObject {
         new Object[] {
           p.scheme, p.host, p.port, null,
         });
+  }
+
+  private static String serializePath(URLParser p) {
+    if (p.opaquePath != null) {
+      return p.opaquePath.toString();
+    }
+    var b = new StringBuilder();
+    for (var seg : p.path) {
+      b.append('/');
+      b.append(seg);
+    }
+    return b.toString();
+  }
+
+  private String serialize(URLParser p) {
+    var s = new StringBuilder();
+    s.append(protocol);
+    if (!host.isEmpty()) {
+      s.append("//");
+      if (!username.isEmpty() || !password.isEmpty()) {
+        s.append(username);
+        if (!password.isEmpty()) {
+          s.append(':');
+          s.append(password);
+        }
+        s.append('@');
+      }
+      s.append(host);
+      if (!port.isEmpty()) {
+        s.append(':');
+        s.append(port);
+      }
+    } else {
+      if (p.opaquePath == null && p.path.size() > 1 && p.path.get(0).isEmpty()) {
+        s.append("/.");
+      }
+    }
+    s.append(pathname);
+    s.append(search);
+    s.append(hash);
+    return s.toString();
   }
 
   private static URL realThis(Scriptable thisObj) {
@@ -251,5 +297,17 @@ public class URL extends ScriptableObject {
 
   private static Object getOrigin(Scriptable scriptable) {
     return realThis(scriptable).origin;
+  }
+
+  private static Object getHref(Scriptable scriptable) {
+    return realThis(scriptable).href;
+  }
+
+  private static void setHref(Scriptable scriptable, Object o) {
+    // TODO rebuild the URL!
+  }
+
+  private static Object toJSON(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+    return realThis(thisObj).href;
   }
 }

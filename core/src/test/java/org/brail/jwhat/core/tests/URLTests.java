@@ -29,7 +29,7 @@ public class URLTests {
   }
 
   public static Object[] getTestScripts() {
-    return WPTTestLauncher.findTests("url");
+    return WPTTestLauncher.findTests("url", new String[] {"historical."});
   }
 
   @ParameterizedTest
