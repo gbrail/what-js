@@ -26,6 +26,7 @@ public class URLParser {
   private CharSequence input;
   private StringBuilder buf;
   private int p;
+  private int bufferStart;
   private boolean atSignSeen;
   private boolean insideBrackets;
   private List<String> errors;
@@ -63,8 +64,8 @@ public class URLParser {
     if (in == null || in.isEmpty()) {
       return;
     }
+    // TODO do this without toString()
     input = in.toString().trim();
-    input = TAB_NEWLINE.matcher(input).replaceAll("");
     resetBuffer();
     ParseState state = ParseState.SCHEME_START;
 
@@ -76,6 +77,9 @@ public class URLParser {
         c = input.charAt(p);
       } else {
         c = EOF;
+      }
+      if (URLUtils.isTabOrNewline(c)) {
+        continue;
       }
 
       switch (state) {
@@ -167,7 +171,7 @@ public class URLParser {
 
   private ParseState schemeStartState(char c) {
     if (URLUtils.isAlpha(c)) {
-      buf.append(Character.toLowerCase(c));
+      addBuffer(Character.toLowerCase(c));
       return ParseState.SCHEME;
     }
 
@@ -177,13 +181,12 @@ public class URLParser {
 
   private ParseState schemeState(char c, URLParser base) {
     if (URLUtils.isAlpha(c) || c == '+' || c == '-' || c == '.') {
-      buf.append(Character.toLowerCase(c));
+      addBuffer(Character.toLowerCase(c));
       return ParseState.SCHEME;
     }
 
     if (c == ':') {
-      scheme = buf.toString();
-      resetBuffer();
+      scheme = consumeBuffer();
       special = URLUtils.isSpecialScheme(scheme);
       if ("file".equals(scheme)) {
         if (nextChar() != '/' || nextNextChar() != '/') {
@@ -317,28 +320,27 @@ public class URLParser {
     if (c == '@') {
       addError("invalid-credentials");
       if (atSignSeen) {
-        buf.insert(0, "%40");
+        prependBuffer("%40");
       }
       atSignSeen = true;
-      decodePassword(buf);
-      resetBuffer();
+      decodePassword(consumeBuffer());
     } else if ((c == EOF || c == '/' || c == '?' || c == '#') || (special && c == '\\')) {
-      if (atSignSeen && buf.isEmpty()) {
+      if (atSignSeen && bufferEmpty()) {
         addError("host-missing");
         return ParseState.FAILURE;
       }
-      p -= (buf.length() + 1);
-      resetBuffer();
+      // Rewind to start of buffer, including characters we skipped
+      p -= rewindBuffer() + 1;
       return ParseState.HOST;
     } else {
-      buf.append(c);
+      addBuffer(c);
     }
     return ParseState.AUTHORITY;
   }
 
   private ParseState hostState(char c, ParseState initState) {
     if (c == ':' && !insideBrackets) {
-      if (buf.isEmpty()) {
+      if (bufferEmpty()) {
         addError("host-missing");
         return ParseState.FAILURE;
       }
@@ -354,17 +356,16 @@ public class URLParser {
 
     if ((c == EOF || c == '/' || c == '?' || c == '#') || (special && c == '\\')) {
       p--;
-      if (special && buf.isEmpty()) {
+      if (special && bufferEmpty()) {
         addError("host-missing");
         return ParseState.FAILURE;
       }
-      var h = decodeHost(buf, !URLUtils.isSpecialScheme(scheme));
+      var h = decodeHost(consumeBuffer(), !URLUtils.isSpecialScheme(scheme));
       if (h.isEmpty()) {
         addError("invalid-host");
         return ParseState.FAILURE;
       }
       host = h.get();
-      buf = new StringBuilder();
       return ParseState.PATH_START;
     }
 
@@ -373,18 +374,18 @@ public class URLParser {
     } else if (c == ']') {
       insideBrackets = false;
     }
-    buf.append(c);
+    addBuffer(c);
     return initState;
   }
 
   private ParseState portState(char c) {
     if (URLUtils.isDigit(c)) {
-      buf.append(c);
+      addBuffer(c);
       return ParseState.PORT;
     }
 
     if ((c == EOF || c == '/' || c == '?' || c == '#') || (special && c == '\\')) {
-      if (!buf.isEmpty()) {
+      if (!bufferEmpty()) {
         var dp = decodePort(buf);
         if (dp.isEmpty()) {
           addError("port-out-of-range");
@@ -456,7 +457,7 @@ public class URLParser {
     if (c == EOF || c == '/' || c == '\\' || c == '?' || c == '#') {
       p--;
       // Check windows thing
-      if (buf.isEmpty()) {
+      if (bufferEmpty()) {
         host = "";
         return ParseState.PATH_START;
       }
@@ -473,7 +474,7 @@ public class URLParser {
       resetBuffer();
       return ParseState.PATH_START;
     }
-    buf.append(c);
+    addBuffer(c);
     return ParseState.FILE_HOST;
   }
 
@@ -509,19 +510,20 @@ public class URLParser {
       if (special && c == '\\') {
         addError("invalid-reverse-solidus");
       }
-      if ("..".contentEquals(buf)) {
+      if (bufferEquals("..")) {
         shortenPath();
         if (c != '/' && !(special && c == '\\')) {
           path.add("");
         }
-      } else if (".".contentEquals(buf) && c != '/' && !(special && c == '\\')) {
+      } else if (bufferEquals(".") && c != '/' && !(special && c == '\\')) {
         path.add("");
-      } else if (!".".contentEquals(buf)) {
-        if ("file".equals(scheme) && path.isEmpty() && URLUtils.isWindowsDriveLetter(buf)) {
-          assert buf.length() == 2;
-          buf.setCharAt(1, ':');
+      } else if (!bufferEquals(".")) {
+        String pb = consumeBuffer();
+        if ("file".equals(scheme) && path.isEmpty() && URLUtils.isWindowsDriveLetter(pb)) {
+          assert pb.length() == 2;
+          pb = new String(new char[]{pb.charAt(0), ':'});
         }
-        path.add(buf.toString());
+        path.add(pb);
       }
       resetBuffer();
       if (c == '?') {
@@ -541,7 +543,7 @@ public class URLParser {
       addError("invalid-url-unit");
     }
     // TODO percent-encoding
-    buf.append(c);
+    addBuffer(c);
     return ParseState.PATH;
   }
 
@@ -579,8 +581,7 @@ public class URLParser {
   private ParseState queryState(char c) {
     if (c == '#' || c == EOF) {
       // TODO percent-encode the query
-      query = buf.toString();
-      resetBuffer();
+      query = consumeBuffer();
       if (c == '#') {
         fragment = "";
         return ParseState.FRAGMENT;
@@ -594,7 +595,7 @@ public class URLParser {
         addError("invalid-url-unit");
       }
       // TODO percent-encoding
-      buf.append(c);
+      addBuffer(c);
     }
     return ParseState.QUERY;
   }
@@ -692,8 +693,60 @@ public class URLParser {
     };
   }
 
+  private boolean bufferEmpty() {
+    return buf == null || buf.isEmpty();
+  }
+
+  private int bufferLength() {
+    return buf == null ? 0 : buf.length();
+  }
+
+  private boolean bufferEquals(String s) {
+    return (buf != null && s.contentEquals(buf));
+  }
+
   private void resetBuffer() {
-    buf = new StringBuilder();
+    buf = null;
+  }
+
+  private String getBuffer() {
+    if (buf != null) {
+      return buf.toString();
+    }
+    return "";
+  }
+
+  private String consumeBuffer() {
+    if (buf != null) {
+      String s = buf.toString();
+      resetBuffer();
+      return s;
+    }
+    return "";
+  }
+
+  private void addBuffer(char c) {
+    if (buf == null) {
+      bufferStart = p;
+      buf = new StringBuilder();
+    }
+    buf.append(c);
+  }
+
+  private void prependBuffer(String s) {
+    if (buf == null) {
+      bufferStart = p;
+      buf = new StringBuilder();
+    }
+    buf.insert(0, s);
+  }
+
+  private int rewindBuffer() {
+    if (buf != null) {
+      resetBuffer();
+      return p - bufferStart;
+    }
+    return 0;
   }
 
   private void addError(String msg) {
@@ -725,7 +778,8 @@ public class URLParser {
       System.exit(2);
     }
 
-    String url = args[0];
+    //String url = args[0];
+    String url = "http://example\t.org";
     String base = args.length > 1 ? args[1] : null;
 
     URLParser bp = null;
@@ -736,7 +790,9 @@ public class URLParser {
         assert e.isPresent();
         System.err.println("FAILURE: " + e.get());
         System.exit(1);
-      } else e.ifPresent(s -> System.err.println("WARNING: " + s));
+      } else {
+        e.ifPresent(s -> System.err.println("WARNING: " + s));
+      }
     }
 
     var p = new URLParser(url, bp);
@@ -745,6 +801,8 @@ public class URLParser {
       assert e.isPresent();
       System.err.println("FAILURE: " + e.get());
       System.exit(1);
-    } else e.ifPresent(s -> System.err.println("WARNING: " + s));
+    } else {
+      e.ifPresent(s -> System.err.println("WARNING: " + s));
+    }
   }
 }

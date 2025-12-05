@@ -92,6 +92,13 @@ public class URLUtils {
     return c <= 0x1f;
   }
 
+  public static boolean isTabOrNewline(char c) {
+    return switch (c) {
+      case '\t', '\r', '\n' -> true;
+      default -> false;
+    };
+  }
+
   // Byte sets for URL encoding and decoding
 
   public static boolean isControlPEncode(byte b) {
