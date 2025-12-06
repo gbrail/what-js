@@ -164,7 +164,7 @@ public class URL extends ScriptableObject {
     if (parsed.fragment == null || parsed.fragment.isEmpty()) {
       hash = "";
     } else {
-      hash = '#' + parsed.fragment;
+      hash = '#' + parsed.fragment.toString();
     }
     // Needs to happen after everything above is set
     href = serialize(parsed);

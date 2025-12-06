@@ -16,11 +16,7 @@ public class URLUtils {
       if (b == ' ' && spaceAsPlus) {
         sb.append('+');
       } else if (k.shouldEncode(b)) {
-        sb.append('%');
-        // Convert the (signed) byte to two hex digits
-        int ub = b & 0xFF;
-        sb.append(HEX_DIGITS[ub >>> 4]);
-        sb.append(HEX_DIGITS[ub & 0x0f]);
+        appendEncoded(b, sb);
       } else {
         sb.append((char) b);
       }
@@ -52,6 +48,35 @@ public class URLUtils {
       }
     }
     return new String(b, 0, p, StandardCharsets.UTF_8);
+  }
+
+  public static void percentEncode(char c, Classifier k, StringBuilder sb) {
+    if (c <= 0x7F) {
+      byte b = (byte) c;
+      if (k.shouldEncode(b)) {
+        appendEncoded(b, sb);
+      } else {
+        sb.append(c);
+      }
+    } else if (c <= 0x7FF) {
+      appendEncoded(0xC0 | (c >> 6), sb);
+      appendEncoded(0x80 | (c & 0x3F), sb);
+    } else {
+      appendEncoded(0xE0 | (c >> 12), sb);
+      appendEncoded(0x80 | ((c >> 6) & 0x3F), sb);
+      appendEncoded(0x80 | (c & 0x3F), sb);
+    }
+  }
+
+  private static void appendEncoded(byte b, StringBuilder sb) {
+    appendEncoded(b & 0xff, sb);
+  }
+
+  private static void appendEncoded(int ub, StringBuilder sb) {
+    assert ub <= Character.MAX_VALUE;
+    sb.append('%');
+    sb.append(HEX_DIGITS[ub >>> 4]);
+    sb.append(HEX_DIGITS[ub & 0x0f]);
   }
 
   // ASCII stuff

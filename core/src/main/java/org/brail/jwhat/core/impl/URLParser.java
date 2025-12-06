@@ -17,7 +17,7 @@ public class URLParser {
   public List<String> path = new ArrayList<>();
   public StringBuilder opaquePath;
   public String query;
-  public String fragment;
+  public StringBuilder fragment;
   public String username = "";
   public String password = "";
   public String host;
@@ -269,7 +269,7 @@ public class URLParser {
         return ParseState.QUERY;
       }
       if (c == '#') {
-        fragment = "";
+        fragment = new StringBuilder();
         return ParseState.FRAGMENT;
       }
       query = null;
@@ -424,7 +424,7 @@ public class URLParser {
         return ParseState.QUERY;
       }
       if (c == '#') {
-        fragment = "";
+        fragment = new StringBuilder();
         return ParseState.FRAGMENT;
       }
       if (c != EOF) {
@@ -493,7 +493,7 @@ public class URLParser {
       return ParseState.QUERY;
     }
     if (c == '#') {
-      fragment = "";
+      fragment = new StringBuilder();
       return ParseState.FRAGMENT;
     }
     if (c != EOF) {
@@ -521,7 +521,7 @@ public class URLParser {
         String pb = consumeBuffer();
         if ("file".equals(scheme) && path.isEmpty() && URLUtils.isWindowsDriveLetter(pb)) {
           assert pb.length() == 2;
-          pb = new String(new char[]{pb.charAt(0), ':'});
+          pb = new String(new char[] {pb.charAt(0), ':'});
         }
         path.add(pb);
       }
@@ -531,7 +531,7 @@ public class URLParser {
         return ParseState.QUERY;
       }
       if (c == '#') {
-        fragment = "";
+        fragment = new StringBuilder();
         return ParseState.FRAGMENT;
       }
     }
@@ -542,8 +542,7 @@ public class URLParser {
     if (c == '%' && (!URLUtils.isHexDigit(nextChar()) || !URLUtils.isHexDigit(nextNextChar()))) {
       addError("invalid-url-unit");
     }
-    // TODO percent-encoding
-    addBuffer(c);
+    addBufferEncoded(c, URLUtils::isPathPEncode);
     return ParseState.PATH;
   }
 
@@ -553,7 +552,7 @@ public class URLParser {
       return ParseState.QUERY;
     }
     if (c == '#') {
-      fragment = "";
+      fragment = new StringBuilder();
       return ParseState.FRAGMENT;
     }
     if (opaquePath == null) {
@@ -572,18 +571,21 @@ public class URLParser {
       if (c == '%' && (!URLUtils.isHexDigit(nextChar()) || !URLUtils.isHexDigit(nextNextChar()))) {
         addError("invalid-url-unit");
       }
-      // TODO percent-encoding
-      opaquePath.append(c);
+      URLUtils.percentEncode(c, URLUtils::isControlPEncode, opaquePath);
     }
     return ParseState.OPAQUE_PATH;
   }
 
   private ParseState queryState(char c) {
     if (c == '#' || c == EOF) {
-      // TODO percent-encode the query
-      query = consumeBuffer();
+      String q = consumeBuffer();
+      if (special) {
+        query = URLUtils.percentEncode(q, URLUtils::isSpecialQueryPEncode, false);
+      } else {
+        query = URLUtils.percentEncode(q, URLUtils::isQueryPEncode, false);
+      }
       if (c == '#') {
-        fragment = "";
+        fragment = new StringBuilder();
         return ParseState.FRAGMENT;
       }
     }
@@ -594,7 +596,7 @@ public class URLParser {
       if (c == '%' && (URLUtils.isHexDigit(nextChar()) || !URLUtils.isHexDigit(nextNextChar()))) {
         addError("invalid-url-unit");
       }
-      // TODO percent-encoding
+      // Percent-encoding happens later, see the spec about JIS
       addBuffer(c);
     }
     return ParseState.QUERY;
@@ -607,8 +609,9 @@ public class URLParser {
     if (c == '%' && (!URLUtils.isHexDigit(nextChar()) || !URLUtils.isHexDigit(nextNextChar()))) {
       addError("invalid-url-unit");
     }
-    // TODO percent-encoding
-    fragment += c;
+    // The spec says not to use the buffer, which makes this inefficient,
+    // not sure why.
+    URLUtils.percentEncode(c, URLUtils::isFragmentPEncode, fragment);
     return ParseState.FRAGMENT;
   }
 
@@ -733,6 +736,14 @@ public class URLParser {
     buf.append(c);
   }
 
+  private void addBufferEncoded(char c, URLUtils.Classifier k) {
+    if (buf == null) {
+      bufferStart = p;
+      buf = new StringBuilder();
+    }
+    URLUtils.percentEncode(c, k, buf);
+  }
+
   private void prependBuffer(String s) {
     if (buf == null) {
       bufferStart = p;
@@ -778,7 +789,7 @@ public class URLParser {
       System.exit(2);
     }
 
-    //String url = args[0];
+    // String url = args[0];
     String url = "http://example\t.org";
     String base = args.length > 1 ? args[1] : null;
 
