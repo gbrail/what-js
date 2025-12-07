@@ -185,7 +185,7 @@ public class URLParser {
   }
 
   private ParseState schemeState(char c) {
-    if (URLUtils.isAlpha(c) || c == '+' || c == '-' || c == '.') {
+    if (URLUtils.isAlphanumeric(c) || c == '+' || c == '-' || c == '.') {
       addBuffer(Character.toLowerCase(c));
       return ParseState.SCHEME;
     }
