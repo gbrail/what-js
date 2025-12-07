@@ -1,4 +1,4 @@
-package org.brail.jwhat.core.impl;
+package org.brail.jwhat.url;
 
 import java.net.Inet6Address;
 import java.net.InetAddress;
@@ -7,21 +7,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
+import org.brail.jwhat.core.impl.URLUtils;
 
 public class URLParser {
-  private static final Pattern TAB_NEWLINE = Pattern.compile("\\t\\r\\n");
   private static final Pattern COLON = Pattern.compile(":");
   private static final char EOF = Character.MAX_VALUE;
 
-  public String scheme = "";
-  public List<String> path = new ArrayList<>();
-  public StringBuilder opaquePath;
-  public String query;
-  public StringBuilder fragment;
-  public String username = "";
-  public String password = "";
-  public String host;
-  public String port;
+  private final URL t;
+  private final URL base;
 
   private CharSequence input;
   private StringBuilder buf;
@@ -59,8 +52,9 @@ public class URLParser {
   };
 
   /** Implement the "basic URL parser" from WhatWG Section 4. */
-  public URLParser(CharSequence in, URLParser base) {
-    assert base == null || !base.isFailure();
+  public URLParser(CharSequence in, URL target, URL base) {
+    this.t = target;
+    this.base = base;
     if (in == null || (in.isEmpty() && base == null)) {
       return;
     }
@@ -86,10 +80,10 @@ public class URLParser {
           state = schemeStartState(c);
           break;
         case SCHEME:
-          state = schemeState(c, base);
+          state = schemeState(c);
           break;
         case NO_SCHEME:
-          state = noSchemeState(c, base);
+          state = noSchemeState(c);
           break;
         case SPECIAL_REL_OR_AUTHORITY:
           state = specialRelativeOrAuthorityState(c);
@@ -98,10 +92,10 @@ public class URLParser {
           state = pathOrAuthorityState(c);
           break;
         case RELATIVE:
-          state = relativeState(c, base);
+          state = relativeState(c);
           break;
         case RELATIVE_SLASH:
-          state = relativeSlashState(c, base);
+          state = relativeSlashState(c);
           break;
         case SPECIAL_AUTHORITY_SLASHES:
           state = specialAuthoritySlashesState(c);
@@ -120,10 +114,10 @@ public class URLParser {
           state = portState(c);
           break;
         case FILE:
-          state = fileState(c, base);
+          state = fileState(c);
           break;
         case FILE_SLASH:
-          state = fileSlashState(c, base);
+          state = fileSlashState(c);
           break;
         case FILE_HOST:
           state = fileHostState(c);
@@ -178,24 +172,23 @@ public class URLParser {
     return ParseState.NO_SCHEME;
   }
 
-  private ParseState schemeState(char c, URLParser base) {
+  private ParseState schemeState(char c) {
     if (URLUtils.isAlpha(c) || c == '+' || c == '-' || c == '.') {
       addBuffer(Character.toLowerCase(c));
       return ParseState.SCHEME;
     }
 
     if (c == ':') {
-      scheme = consumeBuffer();
-      special = URLUtils.isSpecialScheme(scheme);
-      if ("file".equals(scheme)) {
+      t.scheme = consumeBuffer();
+      special = URLUtils.isSpecialScheme(t.scheme);
+      if ("file".equals(t.scheme)) {
         if (nextChar() != '/' || nextNextChar() != '/') {
           addError("special-scheme-missing-following-solidus");
         }
         return ParseState.FILE;
       }
       if (special) {
-        if (base != null && scheme.equals(base.scheme)) {
-          assert base.special;
+        if (base != null && t.scheme.equals(base.scheme)) {
           return ParseState.SPECIAL_REL_OR_AUTHORITY;
         } else {
           return ParseState.SPECIAL_AUTHORITY_SLASHES;
@@ -205,7 +198,7 @@ public class URLParser {
         p++;
         return ParseState.PATH_OR_AUTHORITY;
       } else {
-        path = new ArrayList<>();
+        t.path = new ArrayList<>();
         return ParseState.OPAQUE_PATH;
       }
     }
@@ -216,7 +209,7 @@ public class URLParser {
     return ParseState.NO_SCHEME;
   }
 
-  private ParseState noSchemeState(char c, URLParser base) {
+  private ParseState noSchemeState(char c) {
     if (base == null || (base.opaquePath != null && c != '#')) {
       addError("missing-scheme-non-relative-URL");
       return ParseState.FAILURE;
@@ -247,32 +240,32 @@ public class URLParser {
     return ParseState.PATH;
   }
 
-  private ParseState relativeState(char c, URLParser base) {
-    assert !"file".equals(scheme);
+  private ParseState relativeState(char c) {
+    assert !"file".equals(t.scheme);
     assert base != null;
-    scheme = base.scheme;
+    t.scheme = base.scheme;
     if (c == '/') {
       return ParseState.RELATIVE_SLASH;
     } else if (special && c == '\\') {
       addError("invalid-reverse-solidus");
       return ParseState.RELATIVE_SLASH;
     } else {
-      username = base.username;
-      password = base.password;
-      host = base.host;
-      port = base.port;
-      path = new ArrayList<>(base.path);
-      query = base.query;
+      t.username = base.username;
+      t.password = base.password;
+      t.host = base.host;
+      t.port = base.port;
+      t.path = new ArrayList<>(base.path);
+      t.query = base.query;
       if (c == '?') {
-        query = "";
+        t.query = "";
         return ParseState.QUERY;
       }
       if (c == '#') {
-        fragment = new StringBuilder();
+        t.fragment = new StringBuilder();
         return ParseState.FRAGMENT;
       }
       if (c != EOF) {
-        query = null;
+        t.query = null;
         shortenPath();
         p--;
       }
@@ -280,7 +273,7 @@ public class URLParser {
     }
   }
 
-  private ParseState relativeSlashState(char c, URLParser base) {
+  private ParseState relativeSlashState(char c) {
     if (special && (c == '/' || c == '\\')) {
       if (c == '\\') {
         addError("invalid-reverse-solidus");
@@ -290,10 +283,10 @@ public class URLParser {
     if (c == '/') {
       return ParseState.AUTHORITY;
     }
-    username = base.username;
-    password = base.password;
-    host = base.host;
-    port = base.port;
+    t.username = base.username;
+    t.password = base.password;
+    t.host = base.host;
+    t.port = base.port;
     p--;
     return ParseState.PATH;
   }
@@ -350,7 +343,7 @@ public class URLParser {
         addError("invalid-host");
         return ParseState.FAILURE;
       }
-      host = h.get();
+      t.host = h.get();
       buf = new StringBuilder();
       return ParseState.PORT;
     }
@@ -361,12 +354,12 @@ public class URLParser {
         addError("host-missing");
         return ParseState.FAILURE;
       }
-      var h = decodeHost(consumeBuffer(), !URLUtils.isSpecialScheme(scheme));
+      var h = decodeHost(consumeBuffer(), !URLUtils.isSpecialScheme(t.scheme));
       if (h.isEmpty()) {
         addError("invalid-host");
         return ParseState.FAILURE;
       }
-      host = h.get();
+      t.host = h.get();
       return ParseState.PATH_START;
     }
 
@@ -393,9 +386,9 @@ public class URLParser {
           return ParseState.FAILURE;
         }
         if (isDefaultPort(dp.get())) {
-          port = null;
+          t.port = null;
         } else {
-          port = String.valueOf(dp.get());
+          t.port = String.valueOf(dp.get());
         }
       }
       p--;
@@ -406,9 +399,9 @@ public class URLParser {
     return ParseState.FAILURE;
   }
 
-  private ParseState fileState(char c, URLParser base) {
-    scheme = "file";
-    host = "";
+  private ParseState fileState(char c) {
+    t.scheme = "file";
+    t.host = "";
     if (c == '/' || c == '\\') {
       if (c == '\\') {
         addError("invalid-reverse-solidus");
@@ -416,19 +409,19 @@ public class URLParser {
       return ParseState.FILE_SLASH;
     }
     if (base != null && "file".equals(base.scheme)) {
-      host = base.host;
-      path = new ArrayList<>(base.path);
-      query = base.query;
+      t.host = base.host;
+      t.path = new ArrayList<>(base.path);
+      t.query = base.query;
       if (c == '?') {
-        query = "";
+        t.query = "";
         return ParseState.QUERY;
       }
       if (c == '#') {
-        fragment = new StringBuilder();
+        t.fragment = new StringBuilder();
         return ParseState.FRAGMENT;
       }
       if (c != EOF) {
-        query = null;
+        t.query = null;
         // TODO Check optional Windows thing
         p--;
         return ParseState.PATH;
@@ -438,7 +431,7 @@ public class URLParser {
     return ParseState.PATH;
   }
 
-  private ParseState fileSlashState(char c, URLParser base) {
+  private ParseState fileSlashState(char c) {
     if (c == '/' || c == '\\') {
       if (c == '\\') {
         addError("invalid-reverse-solidus");
@@ -446,7 +439,7 @@ public class URLParser {
       return ParseState.FILE_HOST;
     }
     if (base != null && "file".equals(base.scheme)) {
-      host = base.host;
+      t.host = base.host;
       // TODO weird Windows path thing
     }
     p--;
@@ -458,7 +451,7 @@ public class URLParser {
       p--;
       // Check windows thing
       if (bufferEmpty()) {
-        host = "";
+        t.host = "";
         return ParseState.PATH_START;
       }
       var r = decodeHost(buf, !special);
@@ -467,9 +460,9 @@ public class URLParser {
         return ParseState.FAILURE;
       }
       if ("localhost".equals(r.get())) {
-        host = "";
+        t.host = "";
       } else {
-        host = r.get();
+        t.host = r.get();
       }
       resetBuffer();
       return ParseState.PATH_START;
@@ -489,11 +482,11 @@ public class URLParser {
       return ParseState.PATH;
     }
     if (c == '?') {
-      query = "";
+      t.query = "";
       return ParseState.QUERY;
     }
     if (c == '#') {
-      fragment = new StringBuilder();
+      t.fragment = new StringBuilder();
       return ParseState.FRAGMENT;
     }
     if (c != EOF) {
@@ -513,25 +506,25 @@ public class URLParser {
       if (bufferEquals("..")) {
         shortenPath();
         if (c != '/' && !(special && c == '\\')) {
-          path.add("");
+          t.path.add("");
         }
       } else if (bufferEquals(".") && c != '/' && !(special && c == '\\')) {
-        path.add("");
+        t.path.add("");
       } else if (!bufferEquals(".")) {
         String pb = consumeBuffer();
-        if ("file".equals(scheme) && path.isEmpty() && URLUtils.isWindowsDriveLetter(pb)) {
+        if ("file".equals(t.scheme) && t.path.isEmpty() && URLUtils.isWindowsDriveLetter(pb)) {
           assert pb.length() == 2;
           pb = new String(new char[] {pb.charAt(0), ':'});
         }
-        path.add(pb);
+        t.path.add(pb);
       }
       resetBuffer();
       if (c == '?') {
-        query = "";
+        t.query = "";
         return ParseState.QUERY;
       }
       if (c == '#') {
-        fragment = new StringBuilder();
+        t.fragment = new StringBuilder();
         return ParseState.FRAGMENT;
       }
       return ParseState.PATH;
@@ -549,21 +542,21 @@ public class URLParser {
 
   private ParseState opaquePathState(char c) {
     if (c == '?') {
-      query = "";
+      t.query = "";
       return ParseState.QUERY;
     }
     if (c == '#') {
-      fragment = new StringBuilder();
+      t.fragment = new StringBuilder();
       return ParseState.FRAGMENT;
     }
-    if (opaquePath == null) {
-      opaquePath = new StringBuilder();
+    if (t.opaquePath == null) {
+      t.opaquePath = new StringBuilder();
     }
     if (c == ' ') {
       if (nextChar() == '?' || nextChar() == '#') {
-        opaquePath.append("%20");
+        t.opaquePath.append("%20");
       } else {
-        opaquePath.append(' ');
+        t.opaquePath.append(' ');
       }
     } else if (c != EOF) {
       if (!URLUtils.isURLCodePoint(c) && c != '%') {
@@ -572,7 +565,7 @@ public class URLParser {
       if (c == '%' && (!URLUtils.isHexDigit(nextChar()) || !URLUtils.isHexDigit(nextNextChar()))) {
         addError("invalid-url-unit");
       }
-      URLUtils.percentEncode(c, URLUtils::isControlPEncode, opaquePath);
+      URLUtils.percentEncode(c, URLUtils::isControlPEncode, t.opaquePath);
     }
     return ParseState.OPAQUE_PATH;
   }
@@ -581,12 +574,12 @@ public class URLParser {
     if (c == '#' || c == EOF) {
       String q = consumeBuffer();
       if (special) {
-        query = URLUtils.percentEncode(q, URLUtils::isSpecialQueryPEncode, false);
+        t.query = URLUtils.percentEncode(q, URLUtils::isSpecialQueryPEncode, false);
       } else {
-        query = URLUtils.percentEncode(q, URLUtils::isQueryPEncode, false);
+        t.query = URLUtils.percentEncode(q, URLUtils::isQueryPEncode, false);
       }
       if (c == '#') {
-        fragment = new StringBuilder();
+        t.fragment = new StringBuilder();
         return ParseState.FRAGMENT;
       }
     }
@@ -613,7 +606,7 @@ public class URLParser {
     // The spec says not to use the buffer, which makes this inefficient,
     // not sure why.
     if (c != EOF) {
-      URLUtils.percentEncode(c, URLUtils::isFragmentPEncode, fragment);
+      URLUtils.percentEncode(c, URLUtils::isFragmentPEncode, t.fragment);
     }
     return ParseState.FRAGMENT;
   }
@@ -635,8 +628,8 @@ public class URLParser {
   private void decodePassword(CharSequence b) {
     String[] p = COLON.split(b, 2);
     // TODO doesn't do percent-encoding as per "authority state" section
-    username = p[0];
-    password = p.length > 1 ? p[1] : "";
+    t.username = p[0];
+    t.password = p.length > 1 ? p[1] : "";
   }
 
   private Optional<String> decodeHost(CharSequence s, boolean isOpaque) {
@@ -691,7 +684,7 @@ public class URLParser {
   }
 
   private boolean isDefaultPort(int p) {
-    return switch (scheme) {
+    return switch (t.scheme) {
       case "ftp" -> p == 21;
       case "http", "ws" -> p == 80;
       case "https", "wss" -> p == 443;
@@ -703,23 +696,12 @@ public class URLParser {
     return buf == null || buf.isEmpty();
   }
 
-  private int bufferLength() {
-    return buf == null ? 0 : buf.length();
-  }
-
   private boolean bufferEquals(String s) {
     return (buf != null && s.contentEquals(buf));
   }
 
   private void resetBuffer() {
     buf = null;
-  }
-
-  private String getBuffer() {
-    if (buf != null) {
-      return buf.toString();
-    }
-    return "";
   }
 
   private String consumeBuffer() {
@@ -772,18 +754,18 @@ public class URLParser {
 
   private void shortenPath() {
     // assert path is not opaque (by length?)
-    if (path.size() == 1
-        && "file".equals(scheme)
-        && URLUtils.isNormalizedWindowsDriveLetter(path.get(0))) {
+    if (t.path.size() == 1
+        && "file".equals(t.scheme)
+        && URLUtils.isNormalizedWindowsDriveLetter(t.path.get(0))) {
       return;
     }
-    if (!path.isEmpty()) {
-      path.remove(path.size() - 1);
+    if (!t.path.isEmpty()) {
+      t.path.remove(t.path.size() - 1);
     }
   }
 
   public boolean schemeHasOrigin() {
-    return URLUtils.schemeHasOrigin(scheme);
+    return URLUtils.schemeHasOrigin(t.scheme);
   }
 
   public static void main(String[] args) {
@@ -795,9 +777,9 @@ public class URLParser {
     String url = args[0];
     String base = args.length > 1 ? args[1] : null;
 
-    URLParser bp = null;
+    URL bu = null;
     if (base != null) {
-      bp = new URLParser(base, null);
+      var bp = new URLParser(base, bu, null);
       var e = bp.getErrors();
       if (bp.isFailure()) {
         assert e.isPresent();
@@ -808,7 +790,8 @@ public class URLParser {
       }
     }
 
-    var p = new URLParser(url, bp);
+    var u = new URL();
+    var p = new URLParser(url, u, bu);
     var e = p.getErrors();
     if (p.isFailure()) {
       assert e.isPresent();
