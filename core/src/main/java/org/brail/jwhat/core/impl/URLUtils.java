@@ -203,9 +203,27 @@ public class URLUtils {
     };
   }
 
-  public static boolean isSpecialScheme(String s) {
-    return switch (s) {
+  public static boolean isSpecialScheme(CharSequence s) {
+    return switch (s.toString()) {
       case "ftp", "file", "http", "https", "ws", "wss" -> true;
+      default -> false;
+    };
+  }
+
+  public static boolean isDefaultPort(String p, String scheme) {
+    try {
+      int port = Integer.parseInt(p);
+      return isDefaultPort(port, scheme);
+    } catch (NumberFormatException e) {
+      return false;
+    }
+  }
+
+  public static boolean isDefaultPort(int p, String scheme) {
+    return switch (scheme) {
+      case "ftp" -> p == 21;
+      case "http", "ws" -> p == 80;
+      case "https", "wss" -> p == 443;
       default -> false;
     };
   }

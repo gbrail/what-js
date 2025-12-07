@@ -58,14 +58,10 @@ public class URL extends ScriptableObject {
     URL base = null;
     if (baseStr != null) {
       base = parseURL(baseStr, null);
-      if (base.getFailure().isPresent()) {
-        throw ScriptRuntime.typeError(base.getFailure().get());
-      }
+      base.checkFailure();
     }
     URL u = parseURL(urlStr, base);
-    if (u.getFailure().isPresent()) {
-      throw ScriptRuntime.typeError(u.getFailure().get());
-    }
+    u.checkFailure();
     return u;
   }
 
@@ -112,7 +108,7 @@ public class URL extends ScriptableObject {
 
   static URL parseURL(String url, URL base) {
     var t = new URL();
-    var p = new URLParser(url, t, base);
+    var p = new URLParser(url, t, base, URLParser.ParseState.NONE);
     if (p.isFailure()) {
       assert p.getErrors().isPresent();
       t.parsingFailure = p.getErrors().get();
@@ -125,6 +121,12 @@ public class URL extends ScriptableObject {
       return Optional.of(parsingFailure);
     }
     return Optional.empty();
+  }
+
+  private void checkFailure() {
+    if (parsingFailure != null) {
+      throw ScriptRuntime.typeError(parsingFailure);
+    }
   }
 
   private static String urlArgument(Object[] args) {
@@ -206,8 +208,10 @@ public class URL extends ScriptableObject {
     return realThis(thisObj).scheme + ':';
   }
 
-  private static void setProtocol(Scriptable scriptable, Object o) {
-    // TODO rebuild the URL!
+  private static void setProtocol(Scriptable thisObj, Object val) {
+    String s = ScriptRuntime.toString(val);
+    var self = realThis(thisObj);
+    new URLParser(s + ':', self, null, URLParser.ParseState.SCHEME_START);
   }
 
   private static Object getHash(Scriptable thisObj) {
@@ -218,8 +222,17 @@ public class URL extends ScriptableObject {
     return '#' + self.fragment.toString();
   }
 
-  private static void setHash(Scriptable scriptable, Object o) {
-    // TODO rebuild the URL!
+  private static void setHash(Scriptable thisObj, Object val) {
+    String s = ScriptRuntime.toString(val);
+    var self = realThis(thisObj);
+    if (s.isEmpty()) {
+      self.fragment = null;
+      return;
+    }
+    if (s.startsWith("#")) {
+      s = s.substring(1);
+    }
+    new URLParser(s, self, null, URLParser.ParseState.FRAGMENT);
   }
 
   private static Object getSearch(Scriptable thisObj) {
@@ -230,8 +243,19 @@ public class URL extends ScriptableObject {
     return '?' + self.query;
   }
 
-  private static void setSearch(Scriptable scriptable, Object o) {
-    // TODO rebuild the URL!
+  private static void setSearch(Scriptable thisObj, Object val) {
+    String s = ScriptRuntime.toString(val);
+    var self = realThis(thisObj);
+    if (s.isEmpty()) {
+      self.query = null;
+      // TODO update the search object
+      return;
+    }
+    if (s.startsWith("?")) {
+      s = s.substring(1);
+    }
+    self.query = null;
+    new URLParser(s, self, null, URLParser.ParseState.QUERY);
   }
 
   private static Object getHost(Scriptable thisObj) {
@@ -245,8 +269,13 @@ public class URL extends ScriptableObject {
     return self.host + ':' + self.port;
   }
 
-  private static void setHost(Scriptable scriptable, Object o) {
-    // TODO rebuild the URL!
+  private static void setHost(Scriptable thisObj, Object val) {
+    String s = ScriptRuntime.toString(val);
+    var self = realThis(thisObj);
+    if (self.opaquePath != null) {
+      return;
+    }
+    new URLParser(s, self, null, URLParser.ParseState.HOST);
   }
 
   private static Object getHostname(Scriptable thisObj) {
@@ -255,16 +284,26 @@ public class URL extends ScriptableObject {
     return self.host == null ? "" : self.host;
   }
 
-  private static void setHostname(Scriptable scriptable, Object o) {
-    // TODO rebuild the URL!
+  private static void setHostname(Scriptable thisObj, Object val) {
+    String s = ScriptRuntime.toString(val);
+    var self = realThis(thisObj);
+    if (self.opaquePath != null) {
+      return;
+    }
+    new URLParser(s, self, null, URLParser.ParseState.HOSTNAME);
   }
 
   private static Object getPassword(Scriptable thisObj) {
     return realThis(thisObj).password;
   }
 
-  private static void setPassword(Scriptable scriptable, Object o) {
-    // TODO rebuild the URL!
+  private static void setPassword(Scriptable thisObj, Object val) {
+    String s = ScriptRuntime.toString(val);
+    var self = realThis(thisObj);
+    if (self.upPortNotAllowed()) {
+      return;
+    }
+    self.password = s;
   }
 
   private static Object getPathname(Scriptable thisObj) {
@@ -273,8 +312,14 @@ public class URL extends ScriptableObject {
     return sb.toString();
   }
 
-  private static void setPathname(Scriptable scriptable, Object o) {
-    // TODO rebuild the URL!
+  private static void setPathname(Scriptable thisObj, Object val) {
+    String s = ScriptRuntime.toString(val);
+    var self = realThis(thisObj);
+    if (self.opaquePath != null) {
+      return;
+    }
+    self.path = new ArrayList<>();
+    new URLParser(s, self, null, URLParser.ParseState.PATH_START);
   }
 
   private static Object getPort(Scriptable thisObj) {
@@ -282,16 +327,29 @@ public class URL extends ScriptableObject {
     return self.port == null ? "" : self.port;
   }
 
-  private static void setPort(Scriptable scriptable, Object o) {
-    // TODO rebuild the URL!
+  private static void setPort(Scriptable thisObj, Object val) {
+    String s = ScriptRuntime.toString(val);
+    var self = realThis(thisObj);
+    if (self.upPortNotAllowed()) {
+      return;
+    }
+    if (s.isEmpty()) {
+      self.port = null;
+    }
+    new URLParser(s, self, null, URLParser.ParseState.PORT);
   }
 
   private static Object getUsername(Scriptable thisObj) {
     return realThis(thisObj).username;
   }
 
-  private static void setUsername(Scriptable scriptable, Object o) {
-    // TODO rebuild the URL!
+  private static void setUsername(Scriptable thisObj, Object val) {
+    String s = ScriptRuntime.toString(val);
+    var self = realThis(thisObj);
+    if (self.upPortNotAllowed()) {
+      return;
+    }
+    self.username = s;
   }
 
   private static Object getOrigin(Scriptable thisObj) {
@@ -311,11 +369,18 @@ public class URL extends ScriptableObject {
     return realThis(scriptable).serialize();
   }
 
-  private static void setHref(Scriptable scriptable, Object o) {
-    // TODO rebuild the URL!
+  private static void setHref(Scriptable thisObj, Object val) {
+    String s = ScriptRuntime.toString(val);
+    var self = realThis(thisObj);
+    var nu = new URL();
+    // TODO re-parse everything!
   }
 
   private static Object toJSON(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
     return realThis(thisObj).serialize();
+  }
+
+  private boolean upPortNotAllowed() {
+    return (host == null || host.isEmpty() || "file".equals(scheme));
   }
 }
