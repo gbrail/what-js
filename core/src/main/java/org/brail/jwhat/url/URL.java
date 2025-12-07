@@ -15,6 +15,7 @@ public class URL extends ScriptableObject {
   private String username;
   private String password;
   private String host;
+  private String hostname;
   private String port;
   private String pathname;
   private String search;
@@ -144,10 +145,13 @@ public class URL extends ScriptableObject {
     password = parsed.password;
     if (parsed.host == null) {
       host = "";
+      hostname = "";
     } else if (parsed.port == null) {
       host = parsed.host;
+      hostname = parsed.host;
     } else {
       host = parsed.host + ':' + parsed.port;
+      hostname = parsed.host;
     }
     if (parsed.port == null) {
       port = "";
@@ -204,10 +208,6 @@ public class URL extends ScriptableObject {
         s.append('@');
       }
       s.append(host);
-      if (!port.isEmpty()) {
-        s.append(':');
-        s.append(port);
-      }
     } else {
       if (p.opaquePath == null && p.path.size() > 1 && p.path.get(0).isEmpty()) {
         s.append("/.");
@@ -256,7 +256,7 @@ public class URL extends ScriptableObject {
   }
 
   private static Object getHostname(Scriptable scriptable) {
-    return realThis(scriptable).host;
+    return realThis(scriptable).hostname;
   }
 
   private static void setHostname(Scriptable scriptable, Object o) {

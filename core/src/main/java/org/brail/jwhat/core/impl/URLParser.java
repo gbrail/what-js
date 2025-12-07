@@ -61,12 +61,11 @@ public class URLParser {
   /** Implement the "basic URL parser" from WhatWG Section 4. */
   public URLParser(CharSequence in, URLParser base) {
     assert base == null || !base.isFailure();
-    if (in == null || in.isEmpty()) {
+    if (in == null || (in.isEmpty() && base == null)) {
       return;
     }
     // TODO do this without toString()
     input = in.toString().trim();
-    resetBuffer();
     ParseState state = ParseState.SCHEME_START;
 
     for (p = 0; p <= input.length(); p++) {
@@ -272,9 +271,11 @@ public class URLParser {
         fragment = new StringBuilder();
         return ParseState.FRAGMENT;
       }
-      query = null;
-      shortenPath();
-      p--;
+      if (c != EOF) {
+        query = null;
+        shortenPath();
+        p--;
+      }
       return ParseState.PATH;
     }
   }
@@ -386,7 +387,7 @@ public class URLParser {
 
     if ((c == EOF || c == '/' || c == '?' || c == '#') || (special && c == '\\')) {
       if (!bufferEmpty()) {
-        var dp = decodePort(buf);
+        var dp = decodePort(consumeBuffer());
         if (dp.isEmpty()) {
           addError("port-out-of-range");
           return ParseState.FAILURE;
@@ -396,10 +397,9 @@ public class URLParser {
         } else {
           port = String.valueOf(dp.get());
         }
-        resetBuffer();
       }
       p--;
-      return ParseState.PATH;
+      return ParseState.PATH_START;
     }
 
     addError("port-invalid");
@@ -534,6 +534,7 @@ public class URLParser {
         fragment = new StringBuilder();
         return ParseState.FRAGMENT;
       }
+      return ParseState.PATH;
     }
 
     if (!URLUtils.isURLCodePoint(c) && c != '%') {
@@ -611,7 +612,9 @@ public class URLParser {
     }
     // The spec says not to use the buffer, which makes this inefficient,
     // not sure why.
-    URLUtils.percentEncode(c, URLUtils::isFragmentPEncode, fragment);
+    if (c != EOF) {
+      URLUtils.percentEncode(c, URLUtils::isFragmentPEncode, fragment);
+    }
     return ParseState.FRAGMENT;
   }
 
@@ -789,8 +792,7 @@ public class URLParser {
       System.exit(2);
     }
 
-    // String url = args[0];
-    String url = "http://example\t.org";
+    String url = args[0];
     String base = args.length > 1 ? args[1] : null;
 
     URLParser bp = null;
