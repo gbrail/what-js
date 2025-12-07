@@ -779,26 +779,17 @@ public class URLParser {
 
     URL bu = null;
     if (base != null) {
-      var bp = new URLParser(base, bu, null);
-      var e = bp.getErrors();
-      if (bp.isFailure()) {
-        assert e.isPresent();
-        System.err.println("FAILURE: " + e.get());
+      bu = URL.parseURL(base, null);
+      if (bu.getFailure().isPresent()) {
+        System.err.println("FAILURE: " + bu.getFailure().get());
         System.exit(1);
-      } else {
-        e.ifPresent(s -> System.err.println("WARNING: " + s));
       }
     }
 
-    var u = new URL();
-    var p = new URLParser(url, u, bu);
-    var e = p.getErrors();
-    if (p.isFailure()) {
-      assert e.isPresent();
-      System.err.println("FAILURE: " + e.get());
+    var u = URL.parseURL(url, bu);
+    if (u.getFailure().isPresent()) {
+      System.err.println("FAILURE: " + u.getFailure().get());
       System.exit(1);
-    } else {
-      e.ifPresent(s -> System.err.println("WARNING: " + s));
     }
   }
 }

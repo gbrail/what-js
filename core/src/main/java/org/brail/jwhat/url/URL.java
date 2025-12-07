@@ -2,10 +2,10 @@ package org.brail.jwhat.url;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import org.brail.jwhat.core.impl.URLUtils;
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.LambdaConstructor;
-import org.mozilla.javascript.RhinoException;
 import org.mozilla.javascript.ScriptRuntime;
 import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
@@ -21,6 +21,8 @@ public class URL extends ScriptableObject {
   String password = "";
   String host;
   String port;
+
+  String parsingFailure;
 
   public static void init(Context cx, Scriptable scope) {
     var c = new LambdaConstructor(scope, "URL", 1, URL::constructor);
@@ -48,84 +50,100 @@ public class URL extends ScriptableObject {
     return "URL";
   }
 
-  URL() {}
+  private URL() {}
 
   private static Scriptable constructor(Context cx, Scriptable scope, Object[] args) {
-    String url = requiredArg(args, 0, "url");
-    String base = optionalArg(args, 1);
-    return parseURL(url, base);
+    String urlStr = urlArgument(args);
+    String baseStr = baseArgument(args);
+    URL base = null;
+    if (baseStr != null) {
+      base = parseURL(baseStr, null);
+      if (base.getFailure().isPresent()) {
+        throw ScriptRuntime.typeError(base.getFailure().get());
+      }
+    }
+    URL u = parseURL(urlStr, base);
+    if (u.getFailure().isPresent()) {
+      throw ScriptRuntime.typeError(u.getFailure().get());
+    }
+    return u;
   }
 
   private static Object parse(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
-    String url = requiredArg(args, 0, "url");
-    String base = optionalArg(args, 1);
-    var u = parseURL(url, base);
+    String urlStr = urlArgument(args);
+    String baseStr = baseArgument(args);
+    URL base = null;
+    if (baseStr != null) {
+      base = parseURL(baseStr, null);
+      if (base.getFailure().isPresent()) {
+        return null;
+      }
+    }
+    URL u = parseURL(urlStr, base);
+    if (u.getFailure().isPresent()) {
+      return null;
+    }
     // TODO set prototype?
     u.setParentScope(scope);
     return u;
   }
 
-  private static URL parseURL(String url, String base) {
-    URL bu = null;
-    if (base != null) {
-      bu = new URL();
-      var baseParser = new URLParser(base, bu, null);
-      if (baseParser.isFailure()) {
-        throw getParseFailure(baseParser);
-      }
-    }
-
-    URL u = new URL();
-    URLParser parser = new URLParser(url, u, bu);
-    if (parser.isFailure()) {
-      throw getParseFailure(parser);
-    }
-    return u;
-  }
-
-  private static RhinoException getParseFailure(URLParser parser) {
-    assert parser.getErrors().isPresent();
-    throw ScriptRuntime.typeError("Invalid URL: " + parser.getErrors().get());
-  }
-
   private static Object canParse(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
-    String url = optionalArg(args, 0);
-    String base = optionalArg(args, 1);
-    if (url == null && base == null) {
+    String urlStr = urlArgument(args);
+    String baseStr = baseArgument(args);
+    if (urlStr == null && baseStr == null) {
       return false;
     }
-
-    URL bu = null;
-    if (base != null) {
-      bu = new URL();
-      var baseParser = new URLParser(base, bu, null);
-      if (baseParser.isFailure()) {
+    URL base = null;
+    if (baseStr != null) {
+      base = parseURL(baseStr, null);
+      if (base.getFailure().isPresent()) {
         return false;
       }
     }
-
-    if (url != null) {
-      var u = new URL();
-      URLParser parser = new URLParser(url, u, bu);
-      if (parser.isFailure()) {
+    if (urlStr != null) {
+      URL u = parseURL(urlStr, base);
+      if (u.getFailure().isPresent()) {
         return false;
       }
     }
     return true;
   }
 
-  private static String requiredArg(Object[] args, int p, String name) {
-    String val = optionalArg(args, p);
-    if (val == null) {
-      throw ScriptRuntime.typeError("The \"" + name + "\" argument must be supplied");
+  static URL parseURL(String url, URL base) {
+    var t = new URL();
+    var p = new URLParser(url, t, base);
+    if (p.isFailure()) {
+      assert p.getErrors().isPresent();
+      t.parsingFailure = p.getErrors().get();
     }
-    return val;
+    return t;
   }
 
-  private static String optionalArg(Object[] args, int p) {
-    if (args.length > p) {
-      Object arg = args[p];
+  Optional<String> getFailure() {
+    if (parsingFailure != null) {
+      return Optional.of(parsingFailure);
+    }
+    return Optional.empty();
+  }
+
+  private static String urlArgument(Object[] args) {
+    if (args.length > 0) {
+      Object arg = args[0];
       if (arg != null && !Undefined.isUndefined(arg)) {
+        return ScriptRuntime.toString(arg);
+      }
+    }
+    return null;
+  }
+
+  private static String baseArgument(Object[] args) {
+    if (args.length > 1) {
+      Object arg = args[1];
+      if (arg != null && !Undefined.isUndefined(arg)) {
+        if (arg instanceof URL) {
+          return ((URL) arg).serialize();
+        }
         return ScriptRuntime.toString(arg);
       }
     }
