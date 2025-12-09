@@ -35,4 +35,9 @@ public class Result<T> {
     assert error != null;
     return error;
   }
+
+  public static <T, U> Result<U> continueError(Result<T> r) {
+    assert r.isFailure();
+    return Result.failure(r.error());
+  }
 }

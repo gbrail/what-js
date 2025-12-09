@@ -1,11 +1,9 @@
 package org.brail.jwhat.core.impl;
 
 import java.nio.charset.StandardCharsets;
-import java.util.regex.Pattern;
 
 public class URLUtils {
   private static final char[] HEX_DIGITS = "0123456789ABCDEF".toCharArray();
-  static final Pattern DOT = Pattern.compile("\\.");
 
   public interface Classifier {
     boolean shouldEncode(byte b);
@@ -295,25 +293,5 @@ public class URLUtils {
           true;
       default -> false;
     };
-  }
-
-  public static boolean endsInNumber(CharSequence s) {
-    String[] parts = DOT.split(s);
-    if (parts.length > 0) {
-      String last = parts[parts.length - 1];
-      if (last.isEmpty()) {
-        if (parts.length == 1) {
-          return false;
-        }
-        last = parts[parts.length - 2];
-        if (isOnlyDigits(last)) {
-          return true;
-        }
-        if (AddressUtils.parseIPv4Number(last).isSuccess()) {
-          return true;
-        }
-      }
-    }
-    return false;
   }
 }

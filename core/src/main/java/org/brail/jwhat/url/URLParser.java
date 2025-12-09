@@ -1,12 +1,10 @@
 package org.brail.jwhat.url;
 
-import java.net.Inet6Address;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Pattern;
+import org.brail.jwhat.core.impl.AddressUtils;
 import org.brail.jwhat.core.impl.URLUtils;
 
 public class URLParser {
@@ -709,31 +707,26 @@ public class URLParser {
         addError("IPv6-unclosed-validation");
         return Optional.empty();
       }
-      return decodeIPv6(s.subSequence(1, s.length() - 1));
+      var r = AddressUtils.decodeIPv6Address(s.toString());
+      if (r.isSuccess()) {
+        return Optional.of('[' + r.get() + ']');
+      }
+      addError(r.error());
+      return Optional.empty();
     }
     if (isOpaque) {
       return decodeOpaqueHost(s);
     }
     String dec = URLUtils.percentDecode(s);
-    // TODO IPv4 address parsing
-    return Optional.of(dec);
-  }
-
-  private Optional<String> decodeIPv6(CharSequence s) {
-    // TODO replace with the real algorithm, since this may do a lookup
-    try {
-      var as = s.toString();
-      InetAddress addr = InetAddress.getByName(as);
-      if (addr instanceof Inet6Address && as.contains(":")) {
-        return Optional.of(addr.getHostAddress());
-      } else {
-        addError("IPv6-validation-failed");
-        return Optional.empty();
+    if (AddressUtils.endsInNumber(dec)) {
+      var r = AddressUtils.decodeIPv4Address(dec);
+      if (r.isSuccess()) {
+        return Optional.of(r.get());
       }
-    } catch (UnknownHostException e) {
-      addError("IPv6-validation-failed");
+      addError(r.error());
       return Optional.empty();
     }
+    return Optional.of(dec);
   }
 
   private Optional<String> decodeOpaqueHost(CharSequence s) {
