@@ -2,7 +2,6 @@ package org.brail.jwhat.url;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import org.brail.jwhat.core.impl.URLUtils;
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.LambdaConstructor;
@@ -21,8 +20,6 @@ public class URL extends ScriptableObject {
   String password = "";
   String host;
   String port;
-
-  String parsingFailure;
 
   public static void init(Context cx, Scriptable scope) {
     var c = new LambdaConstructor(scope, "URL", 1, URL::constructor);
@@ -55,33 +52,21 @@ public class URL extends ScriptableObject {
   private static Scriptable constructor(Context cx, Scriptable scope, Object[] args) {
     String urlStr = urlArgument(args);
     String baseStr = baseArgument(args);
-    URL base = null;
-    if (baseStr != null) {
-      base = parseURL(baseStr, null);
-      base.checkFailure();
+    try {
+      return parseImpl(urlStr, baseStr);
+    } catch (URLFormatException e) {
+      throw ScriptRuntime.typeError(e.getMessage());
     }
-    URL u = parseURL(urlStr, base);
-    u.checkFailure();
-    return u;
   }
 
   private static Object parse(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
     String urlStr = urlArgument(args);
     String baseStr = baseArgument(args);
-    URL base = null;
-    if (baseStr != null) {
-      base = parseURL(baseStr, null);
-      if (base.getFailure().isPresent()) {
-        return null;
-      }
-    }
-    URL u = parseURL(urlStr, base);
-    if (u.getFailure().isPresent()) {
+    try {
+      return parseImpl(urlStr, baseStr);
+    } catch (URLFormatException e) {
       return null;
     }
-    // TODO set prototype?
-    u.setParentScope(scope);
-    return u;
   }
 
   private static Object canParse(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
@@ -90,43 +75,23 @@ public class URL extends ScriptableObject {
     if (urlStr == null && baseStr == null) {
       return false;
     }
+    try {
+      parseImpl(urlStr, baseStr);
+      return true;
+    } catch (URLFormatException e) {
+      return false;
+    }
+  }
+
+  private static URL parseImpl(String urlStr, String baseStr) throws URLFormatException {
     URL base = null;
     if (baseStr != null) {
-      base = parseURL(baseStr, null);
-      if (base.getFailure().isPresent()) {
-        return false;
-      }
+      base = new URL();
+      new URLParser(base, null).parse(baseStr, URLParser.ParseState.NONE);
     }
-    if (urlStr != null) {
-      URL u = parseURL(urlStr, base);
-      if (u.getFailure().isPresent()) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  static URL parseURL(String url, URL base) {
-    var t = new URL();
-    var p = new URLParser(url, t, base, URLParser.ParseState.NONE);
-    if (p.isFailure()) {
-      assert p.getErrors().isPresent();
-      t.parsingFailure = p.getErrors().get();
-    }
-    return t;
-  }
-
-  Optional<String> getFailure() {
-    if (parsingFailure != null) {
-      return Optional.of(parsingFailure);
-    }
-    return Optional.empty();
-  }
-
-  private void checkFailure() {
-    if (parsingFailure != null) {
-      throw ScriptRuntime.typeError(parsingFailure);
-    }
+    URL u = new URL();
+    new URLParser(u, base).parse(urlStr, URLParser.ParseState.NONE);
+    return u;
   }
 
   private static String urlArgument(Object[] args) {
@@ -204,6 +169,14 @@ public class URL extends ScriptableObject {
     return LambdaConstructor.convertThisObject(thisObj, URL.class);
   }
 
+  private void reparse(String urlStr, URLParser.ParseState state) {
+    try {
+      new URLParser(this, null).parse(urlStr, state);
+    } catch (URLFormatException e) {
+      // Swallow update failure
+    }
+  }
+
   private static Object getProtocol(Scriptable thisObj) {
     return realThis(thisObj).scheme + ':';
   }
@@ -211,7 +184,7 @@ public class URL extends ScriptableObject {
   private static void setProtocol(Scriptable thisObj, Object val) {
     String s = ScriptRuntime.toString(val);
     var self = realThis(thisObj);
-    new URLParser(s + ':', self, null, URLParser.ParseState.SCHEME_START);
+    self.reparse(s + ':', URLParser.ParseState.SCHEME_START);
   }
 
   private static Object getHash(Scriptable thisObj) {
@@ -232,7 +205,7 @@ public class URL extends ScriptableObject {
     if (s.startsWith("#")) {
       s = s.substring(1);
     }
-    new URLParser(s, self, null, URLParser.ParseState.FRAGMENT);
+    self.reparse(s, URLParser.ParseState.FRAGMENT);
   }
 
   private static Object getSearch(Scriptable thisObj) {
@@ -255,7 +228,7 @@ public class URL extends ScriptableObject {
       s = s.substring(1);
     }
     self.query = null;
-    new URLParser(s, self, null, URLParser.ParseState.QUERY);
+    self.reparse(s, URLParser.ParseState.QUERY);
   }
 
   private static Object getHost(Scriptable thisObj) {
@@ -275,7 +248,7 @@ public class URL extends ScriptableObject {
     if (self.opaquePath != null) {
       return;
     }
-    new URLParser(s, self, null, URLParser.ParseState.HOST);
+    self.reparse(s, URLParser.ParseState.HOST);
   }
 
   private static Object getHostname(Scriptable thisObj) {
@@ -290,7 +263,7 @@ public class URL extends ScriptableObject {
     if (self.opaquePath != null) {
       return;
     }
-    new URLParser(s, self, null, URLParser.ParseState.HOSTNAME);
+    self.reparse(s, URLParser.ParseState.HOSTNAME);
   }
 
   private static Object getPassword(Scriptable thisObj) {
@@ -319,7 +292,7 @@ public class URL extends ScriptableObject {
       return;
     }
     self.path = new ArrayList<>();
-    new URLParser(s, self, null, URLParser.ParseState.PATH_START);
+    self.reparse(s, URLParser.ParseState.PATH_START);
   }
 
   private static Object getPort(Scriptable thisObj) {
@@ -336,7 +309,7 @@ public class URL extends ScriptableObject {
     if (s.isEmpty()) {
       self.port = null;
     }
-    new URLParser(s, self, null, URLParser.ParseState.PORT);
+    self.reparse(s, URLParser.ParseState.PORT);
   }
 
   private static Object getUsername(Scriptable thisObj) {

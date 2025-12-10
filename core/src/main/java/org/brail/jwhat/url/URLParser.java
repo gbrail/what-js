@@ -22,8 +22,7 @@ public class URLParser {
   private boolean insideBrackets;
   private List<String> errors;
   private boolean special;
-  private boolean failed;
-  private final boolean overrideState;
+  private boolean overrideState;
 
   enum ParseState {
     NONE,
@@ -48,14 +47,17 @@ public class URLParser {
     PORT,
     FILE_SLASH,
     FILE_HOST,
-    FAILURE,
     FINISHED
   };
 
-  /** Implement the "basic URL parser" from WhatWG Section 4. */
-  URLParser(CharSequence in, URL target, URL base, ParseState start) {
+  URLParser(URL target, URL base) {
     this.t = target;
     this.base = base;
+  }
+
+  /** Implement the "basic URL parser" from WhatWG Section 4. */
+  void parse(CharSequence in, ParseState start) throws URLFormatException {
+
     ParseState state = start;
     if (state == ParseState.NONE) {
       state = ParseState.SCHEME_START;
@@ -145,20 +147,12 @@ public class URLParser {
         case FRAGMENT:
           state = fragmentState(c);
           break;
-        case FAILURE:
-          failed = true;
-          return;
         case FINISHED:
           return;
         default:
           assert false;
       }
     }
-  }
-
-  /** Return if parsing failed and this URL can't be used. */
-  public boolean isFailure() {
-    return failed;
   }
 
   /**
@@ -182,7 +176,7 @@ public class URLParser {
     return ParseState.NO_SCHEME;
   }
 
-  private ParseState schemeState(char c) {
+  private ParseState schemeState(char c) throws URLFormatException {
     if (URLUtils.isAlphanumeric(c) || c == '+' || c == '-' || c == '.') {
       addBuffer(Character.toLowerCase(c));
       return ParseState.SCHEME;
@@ -236,13 +230,12 @@ public class URLParser {
       p = -1;
       return ParseState.NO_SCHEME;
     }
-    return ParseState.FAILURE;
+    throw new URLFormatException("scheme-state-bad-state");
   }
 
-  private ParseState noSchemeState(char c) {
+  private ParseState noSchemeState(char c) throws URLFormatException {
     if (base == null || (base.opaquePath != null && c != '#')) {
-      addError("missing-scheme-non-relative-URL");
-      return ParseState.FAILURE;
+      throw new URLFormatException("missing-scheme-non-relative-URL");
     }
     if (!"file".equals(base.scheme)) {
       p--;
@@ -340,7 +333,7 @@ public class URLParser {
     return ParseState.SPECIAL_AUTHORITY_IGNORE_SLASHES;
   }
 
-  private ParseState authorityState(char c) {
+  private ParseState authorityState(char c) throws URLFormatException {
     if (c == '@') {
       addError("invalid-credentials");
       if (atSignSeen) {
@@ -350,8 +343,7 @@ public class URLParser {
       decodePassword(consumeBuffer());
     } else if ((c == EOF || c == '/' || c == '?' || c == '#') || (special && c == '\\')) {
       if (atSignSeen && bufferEmpty()) {
-        addError("host-missing");
-        return ParseState.FAILURE;
+        throw new URLFormatException("host-missing");
       }
       // Rewind to start of buffer, including characters we skipped
       p -= rewindBuffer() + 1;
@@ -362,46 +354,33 @@ public class URLParser {
     return ParseState.AUTHORITY;
   }
 
-  private ParseState hostState(char c, ParseState initState) {
+  private ParseState hostState(char c, ParseState initState) throws URLFormatException {
     if (overrideState && "file".equals(t.scheme)) {
       p--;
       return ParseState.FILE_HOST;
     }
     if (c == ':' && !insideBrackets) {
       if (bufferEmpty()) {
-        addError("host-missing");
-        return ParseState.FAILURE;
+        throw new URLFormatException("host-missing");
       }
       if (overrideState && initState == ParseState.HOSTNAME) {
-        return ParseState.FAILURE;
+        throw new URLFormatException("hostname-missing");
       }
-      var h = decodeHost(buf, !special);
-      if (h.isEmpty()) {
-        addError("invalid-host");
-        return ParseState.FAILURE;
-      }
-      t.host = h.get();
-      buf = new StringBuilder();
+      t.host = decodeHost(consumeBuffer(), !special);
       return ParseState.PORT;
     }
 
     if ((c == EOF || c == '/' || c == '?' || c == '#') || (special && c == '\\')) {
       p--;
       if (special && bufferEmpty()) {
-        addError("host-missing");
-        return ParseState.FAILURE;
+        throw new URLFormatException("host-missing");
       }
       if (overrideState
           && bufferEmpty()
           && ((!t.username.isEmpty() || !t.password.isEmpty() || t.port != null))) {
-        return ParseState.FAILURE;
+        throw new URLFormatException("host-empty");
       }
-      var h = decodeHost(consumeBuffer(), !URLUtils.isSpecialScheme(t.scheme));
-      if (h.isEmpty()) {
-        addError("invalid-host");
-        return ParseState.FAILURE;
-      }
-      t.host = h.get();
+      t.host = decodeHost(consumeBuffer(), !URLUtils.isSpecialScheme(t.scheme));
       if (overrideState) {
         return ParseState.FINISHED;
       }
@@ -417,7 +396,7 @@ public class URLParser {
     return initState;
   }
 
-  private ParseState portState(char c) {
+  private ParseState portState(char c) throws URLFormatException {
     if (URLUtils.isDigit(c)) {
       addBuffer(c);
       return ParseState.PORT;
@@ -427,8 +406,7 @@ public class URLParser {
       if (!bufferEmpty()) {
         var dp = decodePort(consumeBuffer());
         if (dp.isEmpty()) {
-          addError("port-out-of-range");
-          return ParseState.FAILURE;
+          throw new URLFormatException("port-out-of-range");
         }
         if (URLUtils.isDefaultPort(dp.get(), t.scheme)) {
           t.port = null;
@@ -440,14 +418,13 @@ public class URLParser {
         }
       }
       if (overrideState) {
-        return ParseState.FAILURE;
+        throw new URLFormatException("port-missing");
       }
       p--;
       return ParseState.PATH_START;
     }
 
-    addError("port-invalid");
-    return ParseState.FAILURE;
+    throw new URLFormatException("port-invalid");
   }
 
   private ParseState fileState(char c) {
@@ -497,7 +474,7 @@ public class URLParser {
     return ParseState.PATH;
   }
 
-  private ParseState fileHostState(char c) {
+  private ParseState fileHostState(char c) throws URLFormatException {
     if (overrideState && URLUtils.isWindowsDriveLetter(getBuffer())) {
       addError("invalid-windows-drive-letter-host");
       return ParseState.PATH;
@@ -512,15 +489,11 @@ public class URLParser {
         }
         return ParseState.PATH_START;
       }
-      var r = decodeHost(buf, !special);
-      if (r.isEmpty()) {
-        addError("host-invalid");
-        return ParseState.FAILURE;
-      }
-      if ("localhost".equals(r.get())) {
+      var h = decodeHost(buf, !special);
+      if ("localhost".equals(h)) {
         t.host = "";
       } else {
-        t.host = r.get();
+        t.host = h;
       }
       if (overrideState) {
         return ParseState.FINISHED;
@@ -701,38 +674,26 @@ public class URLParser {
     t.password = p.length > 1 ? p[1] : "";
   }
 
-  private Optional<String> decodeHost(CharSequence s, boolean isOpaque) {
+  private String decodeHost(CharSequence s, boolean isOpaque) throws URLFormatException {
     if (s.length() > 1 && s.charAt(0) == '[') {
       if (s.charAt(s.length() - 1) != ']') {
-        addError("IPv6-unclosed-validation");
-        return Optional.empty();
+        throw new URLFormatException("IPv6-unclosed-validation");
       }
-      var r = AddressUtils.decodeIPv6Address(s.toString());
-      if (r.isSuccess()) {
-        return Optional.of('[' + r.get() + ']');
-      }
-      addError(r.error());
-      return Optional.empty();
+      var a = AddressUtils.decodeIPv6Address(s.toString());
+      return '[' + a + ']';
     }
     if (isOpaque) {
       return decodeOpaqueHost(s);
     }
     String dec = URLUtils.percentDecode(s);
-    if (AddressUtils.endsInNumber(dec)) {
-      var r = AddressUtils.decodeIPv4Address(dec);
-      if (r.isSuccess()) {
-        return Optional.of(r.get());
-      }
-      addError(r.error());
-      return Optional.empty();
-    }
-    return Optional.of(dec);
+    if (AddressUtils.endsInNumber(dec)) {}
+    return dec;
   }
 
-  private Optional<String> decodeOpaqueHost(CharSequence s) {
+  private String decodeOpaqueHost(CharSequence s) {
     // TODO validate character set as shown in spec
     // Perhaps add a "fail" mode to the URL decoder for this purpose
-    return Optional.of(URLUtils.percentEncode(s, URLUtils::isControlPEncode, false));
+    return URLUtils.percentEncode(s, URLUtils::isControlPEncode, false);
   }
 
   private static Optional<Integer> decodePort(CharSequence s) {
@@ -828,30 +789,5 @@ public class URLParser {
 
   public boolean schemeHasOrigin() {
     return URLUtils.schemeHasOrigin(t.scheme);
-  }
-
-  public static void main(String[] args) {
-    if (args.length < 1) {
-      System.err.println("Usage: URLParser <url> [base]");
-      System.exit(2);
-    }
-
-    String url = args[0];
-    String base = args.length > 1 ? args[1] : null;
-
-    URL bu = null;
-    if (base != null) {
-      bu = URL.parseURL(base, null);
-      if (bu.getFailure().isPresent()) {
-        System.err.println("FAILURE: " + bu.getFailure().get());
-        System.exit(1);
-      }
-    }
-
-    var u = URL.parseURL(url, bu);
-    if (u.getFailure().isPresent()) {
-      System.err.println("FAILURE: " + u.getFailure().get());
-      System.exit(1);
-    }
   }
 }

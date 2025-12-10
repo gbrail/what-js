@@ -1,11 +1,12 @@
 package org.brail.jwhat.core.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import org.brail.jwhat.core.impl.AddressUtils;
+import org.brail.jwhat.url.URLFormatException;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
@@ -30,14 +31,11 @@ public class AddressTests {
 
   @ParameterizedTest
   @MethodSource("validIPv4s")
-  public void testValidIPv4(String a, String expected) throws UnknownHostException {
-    var r = AddressUtils.parseIPv4Address((String) a);
-    if (r.isFailure()) {
-      System.out.println(a + ": " + r.error());
-    }
-    assertTrue(r.isSuccess(), a + " should succeed");
+  public void testValidIPv4(String a, String expected)
+      throws URLFormatException, UnknownHostException {
+    var addr = AddressUtils.parseIPv4Address((String) a);
     var ia = InetAddress.getByName(expected);
-    assertEquals(ia, r.get());
+    assertEquals(ia, addr);
   }
 
   public static String[] invalidIPv4s() {
@@ -62,7 +60,7 @@ public class AddressTests {
   @ParameterizedTest
   @MethodSource("invalidIPv4s")
   public void testInvalidIPv4(String a) {
-    assertTrue(AddressUtils.parseIPv4Address(a).isFailure(), a + " should fail");
+    assertThrows(URLFormatException.class, () -> AddressUtils.parseIPv4Address(a));
   }
 
   public static String[] validIPv6s() {
@@ -84,14 +82,10 @@ public class AddressTests {
 
   @ParameterizedTest
   @MethodSource("validIPv6s")
-  public void testValidIPv6(String a) throws UnknownHostException {
-    var r = AddressUtils.parseIPv6Address(a);
-    if (r.isFailure()) {
-      System.out.println(a + ": " + r.error());
-    }
-    assertTrue(r.isSuccess(), a + " should succeed");
+  public void testValidIPv6(String a) throws URLFormatException, UnknownHostException {
+    var addr = AddressUtils.parseIPv6Address(a);
     var ia = InetAddress.getByName(a);
-    assertEquals(ia, r.get());
+    assertEquals(ia, addr);
   }
 
   public static String[] invalidIPv6s() {
@@ -114,6 +108,6 @@ public class AddressTests {
   @ParameterizedTest
   @MethodSource("invalidIPv6s")
   public void testInvalidIPv6(String a) {
-    assertTrue(AddressUtils.parseIPv6Address(a).isFailure(), a + " should fail");
+    assertThrows(URLFormatException.class, () -> AddressUtils.parseIPv6Address(a));
   }
 }

@@ -3,94 +3,85 @@ package org.brail.jwhat.core.impl;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.regex.Pattern;
+import org.brail.jwhat.url.URLFormatException;
 
 public class AddressUtils {
   private static final char EOF = Character.MAX_VALUE;
   static final Pattern DOT = Pattern.compile("\\.");
 
-  public static Result<String> decodeIPv4Address(String s) {
-    var r = parseIPv4Address(s);
-    if (r.isSuccess()) {
-      return Result.success(r.get().toString());
-    }
-    return Result.continueError(r);
+  public static String decodeIPv4Address(CharSequence s) throws URLFormatException {
+    var a = parseIPv4Address(s);
+    return a.toString();
   }
 
-  public static Result<String> decodeIPv6Address(String s) {
-    var r = parseIPv6Address(s);
-    if (r.isSuccess()) {
-      return Result.success(r.get().toString());
-    }
-    return Result.continueError(r);
+  public static String decodeIPv6Address(CharSequence s) throws URLFormatException {
+    var a = parseIPv6Address(s);
+    return a.toString();
   }
 
-  public static Result<Integer> parseIPv4Number(String s) {
+  public static int parseIPv4Number(CharSequence s) throws URLFormatException {
     if (s.isEmpty()) {
-      return Result.failure("empty");
+      throw new URLFormatException("empty");
     }
     try {
       if (s.length() >= 2 && s.charAt(0) == '0' && (s.charAt(1) == 'x' || s.charAt(1) == 'X')) {
-        String is = s.substring(2);
+        var is = s.subSequence(2, s.length());
         if (is.isEmpty()) {
-          return Result.success(0);
+          return 0;
         }
-        return Result.success(Integer.parseInt(is, 16));
+        return Integer.parseInt(is.toString(), 16);
       }
       if (s.charAt(0) == '0') {
-        String is = s.substring(1);
+        var is = s.subSequence(1, s.length());
         if (is.isEmpty()) {
-          return Result.success(0);
+          return 0;
         }
-        return Result.success(Integer.parseInt(is, 8));
+        return Integer.parseInt(is.toString(), 8);
       }
-      return Result.success(Integer.parseInt(s, 10));
+      return Integer.parseInt(s.toString(), 10);
     } catch (NumberFormatException e) {
-      return Result.failure("number-format");
+      throw new URLFormatException("number-format");
     }
   }
 
-  public static Result<InetAddress> parseIPv4Address(String s) {
+  public static InetAddress parseIPv4Address(CharSequence s) throws URLFormatException {
     String[] parts = DOT.split(s, -1);
     if (parts.length == 0) {
-      return Result.failure("IPV4-empty");
+      throw new URLFormatException("IPV4-empty");
     }
     if (parts[parts.length - 1].isEmpty()) {
-      return Result.failure("IPv4-empty-part");
+      throw new URLFormatException("IPv4-empty-part");
     }
     if (parts.length > 4) {
-      return Result.failure("IPv4-too-many-parts");
+      throw new URLFormatException("IPv4-too-many-parts");
     }
     byte[] addr = new byte[4];
     for (int i = 0; i < parts.length; i++) {
-      var num = parseIPv4Number(parts[i]);
-      if (num.isFailure()) {
-        return Result.failure("IPv4-non-numeric-part");
-      }
-      int n = num.get();
+      var n = parseIPv4Number(parts[i]);
       if (n < 0 || n > 255) {
-        return Result.failure("IPv4-non-numeric-part");
+        throw new URLFormatException("IPv4-non-numeric-part");
       }
       addr[i] = (byte) n;
     }
     try {
-      return Result.success(InetAddress.getByAddress(addr));
+      return InetAddress.getByAddress(addr);
     } catch (UnknownHostException e) {
-      return Result.failure("IPv4-out-of-range");
+      throw new URLFormatException("IPv4-out-of-range", e);
     }
   }
 
-  public static Result<InetAddress> parseIPv6Address(String input) {
+  public static InetAddress parseIPv6Address(CharSequence input) throws URLFormatException {
     int[] addr = new int[8];
     int pieceIndex = 0;
     int compress = -1;
 
     if (input.isEmpty()) {
-      return Result.failure("IPv6-empty");
+      throw new URLFormatException("IPv6-empty");
     }
     int p = 0;
     if (input.charAt(0) == ':') {
       if ((input.length() < 2) || (input.charAt(1) != ':')) {
-        return Result.failure("IPv6-invalid-compression");
+        throw new URLFormatException("IPv6-invalid-compression");
       }
       p += 2;
       pieceIndex++;
@@ -100,12 +91,12 @@ public class AddressUtils {
     char c = p < input.length() ? 0 : EOF;
     while (c != EOF) {
       if (pieceIndex == 8) {
-        return Result.failure("IPv6-too-many-pieces");
+        throw new URLFormatException("IPv6-too-many-pieces");
       }
       c = getChar(input, p);
       if (c == ':') {
         if (compress >= 0) {
-          return Result.failure("IPv6-multiple-compression");
+          throw new URLFormatException("IPv6-multiple-compression");
         }
         p++;
         pieceIndex++;
@@ -122,10 +113,10 @@ public class AddressUtils {
       }
       if (c == '.') {
         if (length == 0) {
-          return Result.failure("IPv4-in-IPv6-invalid-code-point");
+          throw new URLFormatException("IPv4-in-IPv6-invalid-code-point");
         }
         if (pieceIndex > 6) {
-          return Result.failure("IPv4-in-IPv6-too-many-pieces");
+          throw new URLFormatException("IPv4-in-IPv6-too-many-pieces");
         }
         p -= length;
         return parseIPv4IPv6Address(input, p, addr, pieceIndex);
@@ -133,10 +124,10 @@ public class AddressUtils {
       if (c == ':') {
         p++;
         if (p == input.length()) {
-          return Result.failure("IPv6-invalid-code-point");
+          throw new URLFormatException("IPv6-invalid-code-point");
         }
       } else if (c != EOF) {
-        return Result.failure("IPv6-invalid-code-point");
+        throw new URLFormatException("IPv6-invalid-code-point");
       }
       addr[pieceIndex++] = value;
     }
@@ -152,13 +143,13 @@ public class AddressUtils {
       }
     }
     if (compress == 0 && pieceIndex != 8) {
-      return Result.failure("IPv6-too-few-pieces");
+      throw new URLFormatException("IPv6-too-few-pieces");
     }
     return makeIPv6Address(addr);
   }
 
-  private static Result<InetAddress> parseIPv4IPv6Address(
-      String input, int p, int[] addr, int pieceIndex) {
+  private static InetAddress parseIPv4IPv6Address(
+      CharSequence input, int p, int[] addr, int pieceIndex) throws URLFormatException {
     int numbersSeen = 0;
     char c = p < input.length() ? 0 : EOF;
     while (c != EOF) {
@@ -169,23 +160,23 @@ public class AddressUtils {
           p++;
           c = getChar(input, p);
         } else {
-          return Result.failure("IPv4-in-IPv6-invalid-code-point");
+          throw new URLFormatException("IPv4-in-IPv6-invalid-code-point");
         }
       }
       if (!URLUtils.isDigit(c)) {
-        return Result.failure("IPv4-in-IPv6-invalid-code-point");
+        throw new URLFormatException("IPv4-in-IPv6-invalid-code-point");
       }
       while (URLUtils.isDigit(c)) {
         int num = Integer.parseInt(String.valueOf(c), 10);
         if (ipV4Piece < 0) {
           ipV4Piece = num;
         } else if (ipV4Piece == 0) {
-          return Result.failure("IPv4-in-IPv6-invalid-code-point");
+          throw new URLFormatException("IPv4-in-IPv6-invalid-code-point");
         } else {
           ipV4Piece = (ipV4Piece * 10) + num;
         }
         if (ipV4Piece > 255) {
-          return Result.failure("IPv4-in-IPv6-out-of-range-part");
+          throw new URLFormatException("IPv4-in-IPv6-out-of-range-part");
         }
         p++;
         c = getChar(input, p);
@@ -197,12 +188,12 @@ public class AddressUtils {
       }
     }
     if (numbersSeen != 4) {
-      return Result.failure("IPv4-in-IPv6-too-few-parts");
+      throw new URLFormatException("IPv4-in-IPv6-too-few-parts");
     }
     return makeIPv6Address(addr);
   }
 
-  public static Result<InetAddress> makeIPv6Address(int[] ia) {
+  public static InetAddress makeIPv6Address(int[] ia) throws URLFormatException {
     assert ia.length == 8;
     byte[] a = new byte[16];
     for (int i = 0; i < 8; i++) {
@@ -213,16 +204,16 @@ public class AddressUtils {
       a[(i * 2) + 1] = (byte) (v & 0xff);
     }
     try {
-      return Result.success(InetAddress.getByAddress(a));
+      return InetAddress.getByAddress(a);
     } catch (UnknownHostException e) {
-      return Result.failure("IPv6-out-of-range");
+      throw new URLFormatException("IPv6-out-of-range", e);
     }
   }
 
   public static boolean endsInNumber(CharSequence s) {
     String[] parts = DOT.split(s);
     if (parts.length > 0) {
-      String last = parts[parts.length - 1];
+      var last = parts[parts.length - 1];
       if (last.isEmpty()) {
         if (parts.length == 1) {
           return false;
@@ -231,15 +222,18 @@ public class AddressUtils {
         if (URLUtils.isOnlyDigits(last)) {
           return true;
         }
-        if (AddressUtils.parseIPv4Number(last).isSuccess()) {
+        try {
+          AddressUtils.parseIPv4Number(last);
           return true;
+        } catch (URLFormatException e) {
+          return false;
         }
       }
     }
     return false;
   }
 
-  private static char getChar(String s, int p) {
+  private static char getChar(CharSequence s, int p) {
     if (p < s.length()) {
       return s.charAt(p);
     }
