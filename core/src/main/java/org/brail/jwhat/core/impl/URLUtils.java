@@ -1,9 +1,17 @@
 package org.brail.jwhat.core.impl;
 
 import java.nio.charset.StandardCharsets;
+import java.util.AbstractMap;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.regex.Pattern;
 
 public class URLUtils {
   private static final char[] HEX_DIGITS = "0123456789ABCDEF".toCharArray();
+  private static final Pattern AMP = Pattern.compile("&");
+  private static final Pattern EQ = Pattern.compile("=");
+  private static final Pattern PLUS = Pattern.compile("\\+");
 
   public interface Classifier {
     boolean shouldEncode(byte b);
@@ -77,6 +85,43 @@ public class URLUtils {
     sb.append('%');
     sb.append(HEX_DIGITS[ub >>> 4]);
     sb.append(HEX_DIGITS[ub & 0x0f]);
+  }
+
+  // Form encoding
+
+  public static List<Map.Entry<String, String>> decodeURLEncoded(CharSequence s) {
+    String[] parts = AMP.split(s);
+    ArrayList<Map.Entry<String, String>> l = new ArrayList<>();
+    for (String part : parts) {
+      if (part.isEmpty()) {
+        continue;
+      }
+      String[] nv = EQ.split(part, 2);
+      if (nv.length == 1) {
+        l.add(new AbstractMap.SimpleEntry<>(nv[0], null));
+      } else {
+        l.add(new AbstractMap.SimpleEntry<>(nv[0], nv[1]));
+      }
+    }
+    return l;
+  }
+
+  public static String encodeURLEncoded(List<Map.Entry<String, String>> h) {
+    StringBuilder sb = new StringBuilder();
+    for (var e : h) {
+      if (!sb.isEmpty()) {
+        sb.append('&');
+      }
+      sb.append(percentEncode(e.getKey(), URLUtils::isFormPEncode, true));
+      sb.append('=');
+      sb.append(percentEncode(e.getValue(), URLUtils::isFormPEncode, true));
+    }
+    return sb.toString();
+  }
+
+  private static String encodeFormPart(String s) {
+    s = PLUS.matcher(s).replaceAll(" ");
+    return percentDecode(s);
   }
 
   // ASCII stuff
@@ -168,11 +213,8 @@ public class URLUtils {
     if (isPathPEncode(b)) {
       return true;
     }
-    if (b >= '[' && b <= ']') {
-      return true;
-    }
     return switch (b) {
-      case '/', ':', ';', '=', '@', '|' -> true;
+      case '/', ':', ';', '=', '@', '|', '[', ']', '\\' -> true;
       default -> false;
     };
   }
@@ -181,11 +223,8 @@ public class URLUtils {
     if (isUserinfoPEncode(b)) {
       return true;
     }
-    if (b >= '$' && b <= '&') {
-      return true;
-    }
     return switch (b) {
-      case '+', ',' -> true;
+      case '+', ',', '$', '%', '&' -> true;
       default -> false;
     };
   }
@@ -194,11 +233,8 @@ public class URLUtils {
     if (isComponentPEncode(b)) {
       return true;
     }
-    if (b >= '\'' && b <= ')') {
-      return true;
-    }
     return switch (b) {
-      case '!', '~' -> true;
+      case '!', '\'', '(', ')', '~' -> true;
       default -> false;
     };
   }
