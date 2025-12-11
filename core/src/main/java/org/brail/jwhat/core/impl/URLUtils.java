@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
+import org.brail.jwhat.url.URLFormatException;
 
 public class URLUtils {
   private static final char[] HEX_DIGITS = "0123456789ABCDEF".toCharArray();
@@ -24,6 +25,23 @@ public class URLUtils {
       if (b == ' ' && spaceAsPlus) {
         sb.append('+');
       } else if (k.shouldEncode(b)) {
+        appendEncoded(b, sb);
+      } else {
+        sb.append((char) b);
+      }
+    }
+    return sb.toString();
+  }
+
+  public static String percentEncode(String s, Classifier encode, Classifier reject)
+      throws URLFormatException {
+    StringBuilder sb = new StringBuilder();
+    byte[] d = s.getBytes(StandardCharsets.UTF_8);
+    for (byte b : d) {
+      if (reject.shouldEncode(b)) {
+        throw new URLFormatException("host-invalid-code-point");
+      }
+      if (encode.shouldEncode(b)) {
         appendEncoded(b, sb);
       } else {
         sb.append((char) b);
@@ -238,6 +256,14 @@ public class URLUtils {
     }
     return switch (b) {
       case '!', '\'', '(', ')', '~' -> true;
+      default -> false;
+    };
+  }
+
+  public static boolean isForbiddenPEncode(byte b) {
+    return switch (b) {
+      case 0, '\t', '\r', '\n', ' ', '#', '/', ':', '<', '>', '?', '@', '[', '\\', ']', '^', '|' ->
+          true;
       default -> false;
     };
   }

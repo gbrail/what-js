@@ -685,14 +685,14 @@ public class URLParser {
       return decodeOpaqueHost(s);
     }
     String dec = URLUtils.percentDecode(s);
-    if (AddressUtils.endsInNumber(dec)) {}
+    if (AddressUtils.endsInNumber(dec)) {
+      return AddressUtils.decodeIPv4Address(dec);
+    }
     return dec;
   }
 
-  private String decodeOpaqueHost(String s) {
-    // TODO validate character set as shown in spec
-    // Perhaps add a "fail" mode to the URL decoder for this purpose
-    return URLUtils.percentEncode(s, URLUtils::isControlPEncode, false);
+  private String decodeOpaqueHost(String s) throws URLFormatException {
+    return URLUtils.percentEncode(s, URLUtils::isControlPEncode, URLUtils::isForbiddenPEncode);
   }
 
   private static Optional<Integer> decodePort(CharSequence s) {

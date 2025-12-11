@@ -350,14 +350,22 @@ public class URL extends ScriptableObject {
   private static Object getOrigin(Scriptable thisObj) {
     var self = realThis(thisObj);
     if (URLUtils.schemeHasOrigin(self.scheme)) {
-      Context cx = Context.getCurrentContext();
-      return cx.newArray(
-          self,
-          new Object[] {
-            self.scheme, self.host, self.port, null,
-          });
+      var s = new StringBuilder();
+      s.append(self.scheme);
+      s.append(':');
+      if (self.host != null) {
+        s.append("//");
+        // TODO serialize host & port
+        s.append(self.host);
+        if (self.port != null) {
+          s.append(':');
+          s.append(self.port);
+        }
+      }
+      return s.toString();
     }
-    return null;
+    // Spec and tests say to serialize null, not just return it
+    return "null";
   }
 
   private static Object getHref(Scriptable scriptable) {
