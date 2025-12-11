@@ -10,12 +10,14 @@ import org.mozilla.javascript.LambdaConstructor;
 import org.mozilla.javascript.ScriptRuntime;
 import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
+import org.mozilla.javascript.SymbolKey;
 import org.mozilla.javascript.Undefined;
 
 public class URLSearchParams extends ScriptableObject {
   private List<Map.Entry<String, String>> params;
+  private URL url;
 
-  static void init(Context cx, Scriptable scope) {
+  static LambdaConstructor init(Context cx, Scriptable scope) {
     var c = new LambdaConstructor(scope, "URLSearchParams", 1, URLSearchParams::constructor);
     c.definePrototypeProperty(cx, "size", URLSearchParams::getSize);
     c.definePrototypeMethod(scope, "append", 2, URLSearchParams::append);
@@ -25,21 +27,40 @@ public class URLSearchParams extends ScriptableObject {
     c.definePrototypeMethod(scope, "has", 1, URLSearchParams::has);
     c.definePrototypeMethod(scope, "set", 2, URLSearchParams::set);
     c.definePrototypeMethod(scope, "sort", 0, URLSearchParams::sort);
+    c.definePrototypeMethod(scope, "toString", 0, URLSearchParams::stringify);
+    c.definePrototypeProperty(SymbolKey.TO_STRING_TAG, "URLSearchParams", DONTENUM | READONLY);
     ScriptableObject.defineProperty(scope, "URLSearchParams", c, ScriptableObject.DONTENUM);
+    return c;
+  }
+
+  @Override
+  public String toString() {
+    return URLUtils.encodeURLEncoded(params);
+  }
+
+  private static Object stringify(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+    var self = realThis(thisObj);
+    return self.toString();
   }
 
   private static Scriptable constructor(Context context, Scriptable scope, Object[] args) {
     var p = new URLSearchParams();
     if (args.length > 0) {
-      if (args[0] instanceof Scriptable) {
+      Object arg = args[0];
+      if (args[0] instanceof URLSearchParams) {
+        var pargs = (URLSearchParams) arg;
+        p.params = new ArrayList<>(pargs.params);
+        return p;
+      } else if (arg instanceof Scriptable) {
         p.params = new ArrayList<>();
-        p.loadScriptable((Scriptable) args[0]);
-      } else {
-        p.loadString(args[0]);
+        p.loadScriptable((Scriptable) arg);
+        return p;
+      } else if (arg != null && !Undefined.isUndefined(arg)) {
+        p.loadString(arg);
+        return p;
       }
-    } else {
-      p.params = new ArrayList<>();
     }
+    p.params = new ArrayList<>();
     return p;
   }
 
@@ -93,6 +114,24 @@ public class URLSearchParams extends ScriptableObject {
     return LambdaConstructor.convertThisObject(s, URLSearchParams.class);
   }
 
+  void setURL(URL url) {
+    this.url = url;
+  }
+
+  void updateParent() {
+    if (url != null) {
+      url.setQuery(toString());
+    }
+  }
+
+  void reparse(String q) {
+    if (q != null) {
+      params = URLUtils.decodeURLEncoded(q);
+    } else {
+      params = new ArrayList<>();
+    }
+  }
+
   private static Object getSize(Scriptable thisObj) {
     var self = realThis(thisObj);
     return self.params.size();
@@ -107,6 +146,7 @@ public class URLSearchParams extends ScriptableObject {
       }
       var self = realThis(thisObj);
       self.params.add(new AbstractMap.SimpleEntry<>(name, value));
+      self.updateParent();
     }
     return Undefined.instance;
   }
@@ -114,8 +154,18 @@ public class URLSearchParams extends ScriptableObject {
   private static Object delete(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
     if (args.length > 0) {
       String name = ScriptRuntime.toString(args[0]);
+      String value = null;
+      if (args.length > 1 && !Undefined.isUndefined(args[1])) {
+        value = ScriptRuntime.toString(args[1]);
+      }
       var self = realThis(thisObj);
-      self.params.removeIf((k) -> name.equals(k.getKey()));
+      if (value != null) {
+        String vvalue = value;
+        self.params.removeIf((e) -> name.equals(e.getKey()) && vvalue.equals(e.getValue()));
+      } else {
+        self.params.removeIf((e) -> name.equals(e.getKey()));
+      }
+      self.updateParent();
     }
     return Undefined.instance;
   }
@@ -151,7 +201,7 @@ public class URLSearchParams extends ScriptableObject {
     if (args.length > 0) {
       String name = ScriptRuntime.toString(args[0]);
       String value = null;
-      if (args.length > 1) {
+      if (args.length > 1 && !Undefined.isUndefined(args[1])) {
         value = ScriptRuntime.toString(args[1]);
       }
       var self = realThis(thisObj);
@@ -185,11 +235,14 @@ public class URLSearchParams extends ScriptableObject {
       if (!removed) {
         self.params.add(new AbstractMap.SimpleEntry<>(name, value));
       }
+      self.updateParent();
     }
     return Undefined.instance;
   }
 
   private static Object sort(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+    var self = realThis(thisObj);
+    self.params.sort((a, b) -> a.getKey().compareTo(b.getKey()));
     return Undefined.instance;
   }
 

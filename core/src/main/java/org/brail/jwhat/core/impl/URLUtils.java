@@ -17,9 +17,9 @@ public class URLUtils {
     boolean shouldEncode(byte b);
   }
 
-  public static String percentEncode(CharSequence s, Classifier k, boolean spaceAsPlus) {
+  public static String percentEncode(String s, Classifier k, boolean spaceAsPlus) {
     StringBuilder sb = new StringBuilder();
-    byte[] d = s.toString().getBytes(StandardCharsets.UTF_8);
+    byte[] d = s.getBytes(StandardCharsets.UTF_8);
     for (byte b : d) {
       if (b == ' ' && spaceAsPlus) {
         sb.append('+');
@@ -32,30 +32,31 @@ public class URLUtils {
     return sb.toString();
   }
 
-  public static String percentDecode(CharSequence s) {
+  public static String percentDecode(String s) {
+    byte[] in = s.getBytes(StandardCharsets.UTF_8);
     // We can guarantee that the decoded byte array will have fewer bytes than characters
-    byte[] b = new byte[s.length()];
+    byte[] out = new byte[in.length];
     int p = 0;
-    for (int i = 0; i < s.length(); i++) {
-      char c = s.charAt(i);
-      if (c == '%' && i < s.length() - 2) {
-        var is = new String(new char[] {s.charAt(i + 1), s.charAt(i + 2)});
+    for (int i = 0; i < in.length; i++) {
+      byte b = in[i];
+      if (b == '%' && i < in.length - 2) {
+        // is this a two-character hex number?
+        var is = new String(new char[] {(char) in[i + 1], (char) in[i + 2]});
         try {
           var num = Integer.parseInt(is, 16);
           assert num <= 0xff;
-          b[p++] = (byte) num;
+          out[p++] = (byte) (num & 0xff);
           i += 2;
         } catch (NumberFormatException nfe) {
-          // TODO what to do on error?
+          // Failed to look forward, encode the percent
+          out[p++] = b;
         }
       } else {
-        // TODO what do to on error?
-        if (c <= 0x7f) {
-          b[p++] = (byte) c;
-        }
+        // Copy all bytes in case the input is actually UTF-8
+        out[p++] = b;
       }
     }
-    return new String(b, 0, p, StandardCharsets.UTF_8);
+    return new String(out, 0, p, StandardCharsets.UTF_8);
   }
 
   public static void percentEncode(char c, Classifier k, StringBuilder sb) {
@@ -90,7 +91,7 @@ public class URLUtils {
   // Form encoding
 
   public static List<Map.Entry<String, String>> decodeURLEncoded(CharSequence s) {
-    String[] parts = AMP.split(s);
+    String[] parts = AMP.split(s, -1);
     ArrayList<Map.Entry<String, String>> l = new ArrayList<>();
     for (String part : parts) {
       if (part.isEmpty()) {
@@ -98,12 +99,17 @@ public class URLUtils {
       }
       String[] nv = EQ.split(part, 2);
       if (nv.length == 1) {
-        l.add(new AbstractMap.SimpleEntry<>(nv[0], null));
+        l.add(new AbstractMap.SimpleEntry<>(encodeFormPart(nv[0]), ""));
       } else {
-        l.add(new AbstractMap.SimpleEntry<>(nv[0], nv[1]));
+        l.add(new AbstractMap.SimpleEntry<>(encodeFormPart(nv[0]), encodeFormPart(nv[1])));
       }
     }
     return l;
+  }
+
+  private static String encodeFormPart(String s) {
+    s = PLUS.matcher(s).replaceAll(" ");
+    return percentDecode(s);
   }
 
   public static String encodeURLEncoded(List<Map.Entry<String, String>> h) {
@@ -112,16 +118,13 @@ public class URLUtils {
       if (!sb.isEmpty()) {
         sb.append('&');
       }
-      sb.append(percentEncode(e.getKey(), URLUtils::isFormPEncode, true));
+      String key = e.getKey() != null ? e.getKey() : "";
+      sb.append(percentEncode(key, URLUtils::isFormPEncode, true));
       sb.append('=');
-      sb.append(percentEncode(e.getValue(), URLUtils::isFormPEncode, true));
+      String val = e.getValue() != null ? e.getValue() : "";
+      sb.append(percentEncode(val, URLUtils::isFormPEncode, true));
     }
     return sb.toString();
-  }
-
-  private static String encodeFormPart(String s) {
-    s = PLUS.matcher(s).replaceAll(" ");
-    return percentDecode(s);
   }
 
   // ASCII stuff

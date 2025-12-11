@@ -3,6 +3,7 @@ package org.brail.jwhat.cli;
 import java.io.Closeable;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -23,19 +24,17 @@ public class CLI implements Closeable {
   private static final Pattern WS = Pattern.compile("\\s");
   private static final String PROMPT = "> ";
 
-  private final Terminal term;
-  private final LineReader reader;
-  private final PrintWriter writer;
+  private Terminal term;
+  private LineReader reader;
+  private PrintWriter writer;
 
-  private CLI() throws IOException {
-    term = TerminalBuilder.builder().system(true).build();
-    reader = LineReaderBuilder.builder().terminal(term).build();
-    writer = term.writer();
-  }
+  private CLI() throws IOException {}
 
   @Override
   public void close() throws IOException {
-    term.close();
+    if (term != null) {
+      term.close();
+    }
   }
 
   private Scriptable initialize(Context cx) {
@@ -46,6 +45,10 @@ public class CLI implements Closeable {
   }
 
   private void run() throws IOException {
+    term = TerminalBuilder.builder().system(true).build();
+    reader = LineReaderBuilder.builder().terminal(term).build();
+    writer = term.writer();
+
     try (Context cx = Context.enter()) {
       var scope = initialize(cx);
       while (true) {
@@ -75,6 +78,7 @@ public class CLI implements Closeable {
   }
 
   private void runScript(String fileName) throws IOException {
+    writer = new PrintWriter(new OutputStreamWriter(System.out, StandardCharsets.UTF_8), true);
     try (Context cx = Context.enter()) {
       var scope = initialize(cx);
       doLoad(cx, scope, fileName);

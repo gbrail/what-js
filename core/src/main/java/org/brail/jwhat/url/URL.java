@@ -3,6 +3,7 @@ package org.brail.jwhat.url;
 import java.util.ArrayList;
 import java.util.List;
 import org.brail.jwhat.core.impl.URLUtils;
+import org.mozilla.javascript.Constructable;
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.LambdaConstructor;
 import org.mozilla.javascript.ScriptRuntime;
@@ -20,10 +21,17 @@ public class URL extends ScriptableObject {
   String password = "";
   String host;
   String port;
+  URLSearchParams queryObj;
 
   public static void init(Context cx, Scriptable scope) {
+    var paramsConstructor = URLSearchParams.init(cx, scope);
     var c = new LambdaConstructor(scope, "URL", 1, URL::constructor);
-    c.defineConstructorMethod(scope, "parse", 1, URL::parse);
+    c.defineConstructorMethod(
+        scope,
+        "parse",
+        1,
+        (lcx, lscope, thisObj, args) ->
+            URL.parse(lscope, args, (Scriptable) c.getPrototypeProperty()));
     c.defineConstructorMethod(scope, "canParse", 1, URL::canParse);
     c.definePrototypeProperty(cx, "hash", URL::getHash, URL::setHash);
     c.definePrototypeProperty(cx, "host", URL::getHost, URL::setHost);
@@ -35,11 +43,12 @@ public class URL extends ScriptableObject {
     c.definePrototypeProperty(cx, "username", URL::getUsername, URL::setUsername);
     c.definePrototypeProperty(cx, "search", URL::getSearch, URL::setSearch);
     c.definePrototypeProperty(cx, "href", URL::getHref, URL::setHref);
-    c.definePrototypeMethod(scope, "toJSON", 0, URL::toJSON);
+    c.definePrototypeMethod(scope, "toJSON", 0, URL::toString);
+    c.definePrototypeMethod(scope, "toString", 0, URL::toString);
     c.definePrototypeProperty(cx, "origin", URL::getOrigin);
-
+    c.definePrototypeProperty(
+        cx, "searchParams", (thisObj) -> URL.getQuery(thisObj, paramsConstructor));
     ScriptableObject.defineProperty(scope, "URL", c, ScriptableObject.DONTENUM);
-    URLSearchParams.init(cx, scope);
   }
 
   @Override
@@ -48,6 +57,10 @@ public class URL extends ScriptableObject {
   }
 
   private URL() {}
+
+  void setQuery(String q) {
+    this.query = q;
+  }
 
   private static Scriptable constructor(Context cx, Scriptable scope, Object[] args) {
     String urlStr = urlArgument(args);
@@ -59,11 +72,14 @@ public class URL extends ScriptableObject {
     }
   }
 
-  private static Object parse(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+  private static Object parse(Scriptable scope, Object[] args, Scriptable proto) {
     String urlStr = urlArgument(args);
     String baseStr = baseArgument(args);
     try {
-      return parseImpl(urlStr, baseStr);
+      var u = parseImpl(urlStr, baseStr);
+      u.setParentScope(scope);
+      u.setPrototype(proto);
+      return u;
     } catch (URLFormatException e) {
       return null;
     }
@@ -171,7 +187,11 @@ public class URL extends ScriptableObject {
 
   private void reparse(String urlStr, URLParser.ParseState state) {
     try {
+      // TODO what about base?
       new URLParser(this, null).parse(urlStr, state);
+      if (queryObj != null) {
+        queryObj.reparse(query);
+      }
     } catch (URLFormatException e) {
       // Swallow update failure
     }
@@ -219,13 +239,15 @@ public class URL extends ScriptableObject {
   private static void setSearch(Scriptable thisObj, Object val) {
     String s = ScriptRuntime.toString(val);
     var self = realThis(thisObj);
-    if (s.isEmpty()) {
-      self.query = null;
-      // TODO update the search object
-      return;
-    }
     if (s.startsWith("?")) {
       s = s.substring(1);
+    }
+    if (s.isEmpty()) {
+      self.query = null;
+      if (self.queryObj != null) {
+        self.queryObj.reparse(null);
+      }
+      return;
     }
     self.query = null;
     self.reparse(s, URLParser.ParseState.QUERY);
@@ -345,12 +367,32 @@ public class URL extends ScriptableObject {
   private static void setHref(Scriptable thisObj, Object val) {
     String s = ScriptRuntime.toString(val);
     var self = realThis(thisObj);
-    var nu = new URL();
-    // TODO re-parse everything!
+    // This re-parse is a bit different because among other things it can throw
+    // TODO what about base?
+    try {
+      new URLParser(self, null).parse(s, URLParser.ParseState.NONE);
+      if (self.queryObj != null) {
+        self.queryObj.reparse(self.query);
+      }
+    } catch (URLFormatException e) {
+      throw ScriptRuntime.typeError(e.getMessage());
+    }
   }
 
-  private static Object toJSON(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+  private static Object toString(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
     return realThis(thisObj).serialize();
+  }
+
+  private static Object getQuery(Scriptable thisObj, Constructable prototype) {
+    var self = realThis(thisObj);
+    if (self.queryObj == null) {
+      self.queryObj =
+          (URLSearchParams)
+              prototype.construct(
+                  Context.getCurrentContext(), thisObj, new Object[] {'?' + self.query});
+      self.queryObj.setURL(self);
+    }
+    return self.queryObj;
   }
 
   private boolean upPortNotAllowed() {

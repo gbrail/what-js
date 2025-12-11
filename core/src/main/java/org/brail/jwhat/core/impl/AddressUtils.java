@@ -211,7 +211,7 @@ public class AddressUtils {
   }
 
   public static boolean endsInNumber(CharSequence s) {
-    String[] parts = DOT.split(s);
+    String[] parts = DOT.split(s, -1);
     if (parts.length > 0) {
       var last = parts[parts.length - 1];
       if (last.isEmpty()) {

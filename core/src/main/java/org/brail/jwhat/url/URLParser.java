@@ -377,7 +377,7 @@ public class URLParser {
       }
       if (overrideState
           && bufferEmpty()
-          && ((!t.username.isEmpty() || !t.password.isEmpty() || t.port != null))) {
+          && (!t.username.isEmpty() || !t.password.isEmpty() || t.port != null)) {
         throw new URLFormatException("host-empty");
       }
       t.host = decodeHost(consumeBuffer(), !URLUtils.isSpecialScheme(t.scheme));
@@ -489,7 +489,7 @@ public class URLParser {
         }
         return ParseState.PATH_START;
       }
-      var h = decodeHost(buf, !special);
+      var h = decodeHost(consumeBuffer(), !special);
       if ("localhost".equals(h)) {
         t.host = "";
       } else {
@@ -498,7 +498,6 @@ public class URLParser {
       if (overrideState) {
         return ParseState.FINISHED;
       }
-      resetBuffer();
       return ParseState.PATH_START;
     }
     addBuffer(c);
@@ -674,12 +673,12 @@ public class URLParser {
     t.password = p.length > 1 ? p[1] : "";
   }
 
-  private String decodeHost(CharSequence s, boolean isOpaque) throws URLFormatException {
+  private String decodeHost(String s, boolean isOpaque) throws URLFormatException {
     if (s.length() > 1 && s.charAt(0) == '[') {
       if (s.charAt(s.length() - 1) != ']') {
         throw new URLFormatException("IPv6-unclosed-validation");
       }
-      var a = AddressUtils.decodeIPv6Address(s.toString());
+      var a = AddressUtils.decodeIPv6Address(s);
       return '[' + a + ']';
     }
     if (isOpaque) {
@@ -690,7 +689,7 @@ public class URLParser {
     return dec;
   }
 
-  private String decodeOpaqueHost(CharSequence s) {
+  private String decodeOpaqueHost(String s) {
     // TODO validate character set as shown in spec
     // Perhaps add a "fail" mode to the URL decoder for this purpose
     return URLUtils.percentEncode(s, URLUtils::isControlPEncode, false);
