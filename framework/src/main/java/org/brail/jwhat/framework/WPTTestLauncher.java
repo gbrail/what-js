@@ -16,7 +16,8 @@ import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.Undefined;
 
 public class WPTTestLauncher {
-  private static final String TEST_BASE = "../wpt";
+  private static final String TEST_BASE = "../testcases";
+  private static final String RESOURCE_BASE = "../wpt";
 
   private final StringBuilder testHarness;
   private BiConsumer<Context, Scriptable> setupCallback;
@@ -93,11 +94,15 @@ public class WPTTestLauncher {
   public ResultTracker runFile(Context cx, String path) throws IOException {
     var tracker = new ResultTracker();
     var scope = initializeScope(cx, tracker);
-    var absPath = Path.of(TEST_BASE, path);
-    var script = ScriptFixer.fixScript(Files.readString(absPath));
+    var testPath = Path.of(path);
+    var script = Files.readString(testPath);
     var setBase = (Function) scope.get("__setFetchBase", scope);
-    setBase.call(cx, scope, null, new Object[] {absPath.getParent().toString()});
-    cx.evaluateString(scope, testHarness + script, absPath.getFileName().toString(), 1, null);
+    var pp = testPath.getParent();
+    if (pp.getNameCount() <= 2) {
+      throw new AssertionError("too short: " + pp);
+    }
+    setBase.call(cx, scope, null, new Object[] {testPath.getParent().toString()});
+    cx.evaluateString(scope, testHarness + script,testPath.getFileName().toString(), 1, null);
     return tracker;
   }
 

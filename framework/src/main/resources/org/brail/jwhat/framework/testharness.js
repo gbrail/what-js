@@ -457,7 +457,7 @@
      */
     ShadowRealmTestEnvironment.prototype.begin = function(message_destination) {
         if (this.all_loaded) {
-            throw new Error("Tried to start a shadow realm test environment after it has already started");
+            throw new AssertionError("Tried to start a shadow realm test environment after it has already started");
         }
         var fakeMessagePort = {};
         fakeMessagePort.postMessage = message_destination;

@@ -36,7 +36,7 @@ public class MinimalFetch {
       try {
         return Files.readString(p, StandardCharsets.UTF_8);
       } catch (IOException ioe) {
-        throw ScriptRuntime.constructError("error", ioe.toString());
+        throw ScriptRuntime.constructError("Error", ioe.toString());
       }
     }
     return Undefined.instance;
