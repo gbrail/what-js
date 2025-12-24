@@ -4,6 +4,11 @@
 // META: script=../resources/recording-streams.js
 'use strict';
 
+function _classCallCheck(a, n) { if (!(a instanceof n)) throw new TypeError("Cannot call a class as a function"); }
+function _defineProperties(e, r) { for (var t = 0; t < r.length; t++) { var o = r[t]; o.enumerable = o.enumerable || !1, o.configurable = !0, "value" in o && (o.writable = !0), Object.defineProperty(e, _toPropertyKey(o.key), o); } }
+function _createClass(e, r, t) { return r && _defineProperties(e.prototype, r), t && _defineProperties(e, t), Object.defineProperty(e, "prototype", { writable: !1 }), e; }
+function _toPropertyKey(t) { var i = _toPrimitive(t, "string"); return "symbol" == typeof i ? i : i + ""; }
+function _toPrimitive(t, r) { if ("object" != typeof t || !t) return t; var e = t[Symbol.toPrimitive]; if (void 0 !== e) { var i = e.call(t, r || "default"); if ("object" != typeof i) return i; throw new TypeError("@@toPrimitive must return a primitive value."); } return ("string" === r ? String : Number)(t); }
 var error1 = new Error('error1!');
 error1.name = 'error1';
 promise_test(t => {
@@ -135,31 +140,35 @@ promise_test(() => {
     assert_array_equals(ws.events, ['write', 'a', 'write', 'b', 'write', 'c', 'write', 'd', 'close']);
   });
 }, 'Piping from a ReadableStream to a WritableStream that desires more chunks before finishing with previous ones');
-class StepTracker {
-  constructor() {
+var StepTracker = /*#__PURE__*/function () {
+  function StepTracker() {
+    _classCallCheck(this, StepTracker);
     this.waiters = [];
     this.wakers = [];
   }
 
   // Returns promise which resolves when step `n` is reached. Also schedules step n + 1 to happen shortly after the
   // promise is resolved.
-  waitThenAdvance(n) {
-    if (this.waiters[n] === undefined) {
-      this.waiters[n] = new Promise(resolve => {
-        this.wakers[n] = resolve;
-      });
-      this.waiters[n].then(() => flushAsyncEvents()).then(() => {
-        if (this.wakers[n + 1] !== undefined) {
-          this.wakers[n + 1]();
-        }
-      });
+  return _createClass(StepTracker, [{
+    key: "waitThenAdvance",
+    value: function waitThenAdvance(n) {
+      if (this.waiters[n] === undefined) {
+        this.waiters[n] = new Promise(resolve => {
+          this.wakers[n] = resolve;
+        });
+        this.waiters[n].then(() => flushAsyncEvents()).then(() => {
+          if (this.wakers[n + 1] !== undefined) {
+            this.wakers[n + 1]();
+          }
+        });
+      }
+      if (n == 0) {
+        this.wakers[0]();
+      }
+      return this.waiters[n];
     }
-    if (n == 0) {
-      this.wakers[0]();
-    }
-    return this.waiters[n];
-  }
-}
+  }]);
+}();
 promise_test(() => {
   var steps = new StepTracker();
   var desiredSizes = [];

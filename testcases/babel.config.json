@@ -1,7 +1,8 @@
 {
   "plugins": [
     "@babel/plugin-transform-block-scoping",
-    "babel-plugin-transform-async-to-promises"
+    "babel-plugin-transform-async-to-promises",
+    "@babel/plugin-transform-classes"
   ]
 }
 
