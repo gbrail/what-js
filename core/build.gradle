@@ -1,5 +1,7 @@
 plugins {
     id 'jwhat.conventions'
+    id 'java-library'
+    id 'org.gradle.rhino.compiler'
 }
 
 dependencies {
