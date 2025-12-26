@@ -1,12 +1,11 @@
 package org.brail.jwhat.core.impl;
 
-import org.mozilla.javascript.Context;
-import org.mozilla.javascript.Scriptable;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import org.mozilla.javascript.Context;
+import org.mozilla.javascript.Scriptable;
 
 public class Utils {
   public static String readResource(String path) throws IOException {
@@ -26,7 +25,8 @@ public class Utils {
     }
   }
 
-  public static Object evaluateResource(Context cx, Scriptable scope, String path) throws IOException {
+  public static Object evaluateResource(Context cx, Scriptable scope, String path)
+      throws IOException {
     try (InputStream in = Utils.class.getClassLoader().getResourceAsStream(path)) {
       if (in == null) {
         throw new IOException("Could not find " + path);

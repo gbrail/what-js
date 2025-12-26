@@ -9,6 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.regex.Pattern;
 import org.brail.jwhat.console.Console;
+import org.brail.jwhat.stream.Stream;
 import org.brail.jwhat.url.URL;
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.LineReader;
@@ -41,11 +42,12 @@ public class CLI implements Closeable {
     var scope = cx.initStandardObjects();
     Console.builder().printer(new ConsolePrinter(writer)).install(cx, scope);
     URL.init(cx, scope);
+    Stream.init(cx, scope);
     return scope;
   }
 
   private void run() throws IOException {
-    term = TerminalBuilder.builder().system(true).build();
+    term = TerminalBuilder.builder().system(true).dumb(true).build();
     reader = LineReaderBuilder.builder().terminal(term).build();
     writer = term.writer();
 

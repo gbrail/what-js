@@ -12,3 +12,7 @@ application {
     mainModule = 'org.brail.jwhat.cli'
     mainClass = 'org.brail.jwhat.cli.CLI'
 }
+
+run {
+    standardInput = System.in
+}

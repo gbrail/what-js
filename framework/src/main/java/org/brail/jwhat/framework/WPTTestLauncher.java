@@ -102,7 +102,7 @@ public class WPTTestLauncher {
       throw new AssertionError("too short: " + pp);
     }
     setBase.call(cx, scope, null, new Object[] {testPath.getParent().toString()});
-    cx.evaluateString(scope, testHarness + script,testPath.getFileName().toString(), 1, null);
+    cx.evaluateString(scope, testHarness + script, testPath.getFileName().toString(), 1, null);
     return tracker;
   }
 
