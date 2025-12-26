@@ -1,7 +1,7 @@
 package org.brail.jwhat.core.tests;
 
 import org.brail.jwhat.framework.WPTTestLauncher;
-import org.brail.jwhat.url.URL;
+import org.brail.jwhat.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -20,7 +20,7 @@ public class StreamTests {
   public static void init() throws IOException {
     cx = Context.enter();
     launcher = WPTTestLauncher.newLauncher();
-    launcher.setSetupCallback(URL::init);
+    launcher.setSetupCallback(Stream::init);
     launcher.addResource("subset-tests-by-key.js");
   }
 
@@ -47,6 +47,39 @@ public class StreamTests {
   @ParameterizedTest
   @MethodSource("readableByteStreamTests")
   public void readableByteStreams(String fileName) throws IOException {
+    var results = launcher.runFile(cx, fileName);
+    assertTrue(results.success(), results.getFailureReason());
+  }
+
+  public static Object[] writableStreamTests() {
+    return WPTTestLauncher.findTests("streams/writable-streams");
+  }
+
+  @ParameterizedTest
+  @MethodSource("writableStreamTests")
+  public void writableStreams(String fileName) throws IOException {
+    var results = launcher.runFile(cx, fileName);
+    assertTrue(results.success(), results.getFailureReason());
+  }
+
+  public static Object[] transformStreamTests() {
+    return WPTTestLauncher.findTests("streams/transform-streams");
+  }
+
+  @ParameterizedTest
+  @MethodSource("transformStreamTests")
+  public void transformStreams(String fileName) throws IOException {
+    var results = launcher.runFile(cx, fileName);
+    assertTrue(results.success(), results.getFailureReason());
+  }
+
+  public static Object[] pipingTests() {
+    return WPTTestLauncher.findTests("streams/piping");
+  }
+
+  @ParameterizedTest
+  @MethodSource("pipingTests")
+  public void piping(String fileName) throws IOException {
     var results = launcher.runFile(cx, fileName);
     assertTrue(results.success(), results.getFailureReason());
   }
