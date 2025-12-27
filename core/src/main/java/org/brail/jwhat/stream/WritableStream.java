@@ -101,5 +101,9 @@ public class WritableStream extends ScriptableObject {
     return backpressure;
   }
 
+  Object getError() {
+    return error;
+  }
+
   private static final class PendingAbort {}
 }

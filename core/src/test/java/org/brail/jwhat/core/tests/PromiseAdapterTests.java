@@ -1,7 +1,9 @@
 package org.brail.jwhat.core.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.brail.jwhat.console.Console;
 import org.brail.jwhat.core.impl.PromiseAdapter;
 import org.junit.jupiter.api.AfterEach;
@@ -104,5 +106,54 @@ public class PromiseAdapterTests {
         null);
     assertEquals(false, scope.get("resolved", scope));
     assertEquals("Nay", scope.get("rejected", scope));
+  }
+
+  @Test
+  public void testFutureSuccess() {
+    scope.put("ResolveFunc", scope, null);
+    scope.put("p", scope, null);
+    cx.evaluateString(
+        scope,
+        """
+            p = new Promise((resolve, reject) => { ResolveFunc = resolve; });
+            """,
+        "test.js",
+        1,
+        null);
+    var p = scope.get("p", scope);
+    var f = PromiseAdapter.toFuture(cx, scope, p);
+    AtomicBoolean done = new AtomicBoolean();
+    var unused =
+        f.thenRun(
+            () -> {
+              done.set(true);
+            });
+    cx.evaluateString(scope, "ResolveFunc('Done');", "test.js", 1, null);
+    assertTrue(done.get());
+  }
+
+  @Test
+  public void testFutureException() {
+    scope.put("RejectFunc", scope, null);
+    scope.put("p", scope, null);
+    cx.evaluateString(
+        scope,
+        """
+            p = new Promise((resolve, reject) => { RejectFunc = reject; });
+            """,
+        "test.js",
+        1,
+        null);
+    var p = scope.get("p", scope);
+    var f = PromiseAdapter.toFuture(cx, scope, p);
+    AtomicBoolean done = new AtomicBoolean();
+    var unused =
+        f.exceptionally(
+            (t) -> {
+              done.set(true);
+              return null;
+            });
+    cx.evaluateString(scope, "RejectFunc(new Error('error'));", "test.js", 1, null);
+    assertTrue(done.get());
   }
 }

@@ -1,16 +1,16 @@
 package org.brail.jwhat.stream;
 
+import org.brail.jwhat.core.impl.PromiseAdapter;
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.LambdaConstructor;
-import org.mozilla.javascript.NativePromise;
 import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
 import org.mozilla.javascript.Undefined;
 
 public class DefaultWriter extends ScriptableObject {
   private WritableStream stream;
-  private NativePromise closed;
-  private NativePromise ready;
+  private PromiseAdapter closed;
+  private PromiseAdapter ready;
 
   public static LambdaConstructor init(Context cx, Scriptable scope) {
     var constructor =
@@ -38,19 +38,32 @@ public class DefaultWriter extends ScriptableObject {
     return "WritableStreamDefaultWriter";
   }
 
+  private static DefaultWriter realThis(Scriptable thisObj) {
+    return LambdaConstructor.convertThisObject(thisObj, DefaultWriter.class);
+  }
+
   void setUp(Context cx, Scriptable scope, WritableStream stream) {
     this.stream = stream;
     switch (stream.state) {
       case WRITABLE:
         if (!stream.isCloseQueuedOrInFlight() && stream.isBackpressure()) {
-          ready = (NativePromise) cx.newObject(scope, "Promise");
+          ready = PromiseAdapter.uninitialized(cx, scope);
+        } else {
+          ready = PromiseAdapter.resolved(cx, scope, Undefined.instance);
         }
+        closed = PromiseAdapter.uninitialized(cx, scope);
         break;
       case ERRORING:
+        ready = PromiseAdapter.rejected(cx, scope, stream.getError());
+        closed = PromiseAdapter.uninitialized(cx, scope);
         break;
       case ERRORED:
+        ready = PromiseAdapter.rejected(cx, scope, stream.getError());
+        closed = PromiseAdapter.rejected(cx, scope, stream.getError());
         break;
       case CLOSED:
+        ready = PromiseAdapter.rejected(cx, scope, Undefined.instance);
+        closed = PromiseAdapter.rejected(cx, scope, Undefined.instance);
         break;
     }
   }
@@ -77,11 +90,13 @@ public class DefaultWriter extends ScriptableObject {
   }
 
   private static Object getClosed(Scriptable thisObj) {
-    return Undefined.instance;
+    var self = realThis(thisObj);
+    return self.closed == null ? Undefined.instance : self.closed.getPromise();
   }
 
   private static Object getReady(Scriptable thisObj) {
-    return Undefined.instance;
+    var self = realThis(thisObj);
+    return self.ready == null ? Undefined.instance : self.ready.getPromise();
   }
 
   private static Object getDesiredSize(Scriptable thisObj) {
