@@ -7,7 +7,7 @@ import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
 import org.mozilla.javascript.Undefined;
 
-public class DefaultWriter extends ScriptableObject {
+class DefaultWriter extends ScriptableObject {
   private WritableStream stream;
   private PromiseAdapter closed;
   private PromiseAdapter ready;

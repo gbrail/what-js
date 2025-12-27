@@ -16,6 +16,10 @@ public class PromiseAdapter {
   private final Callable resolve;
   private final Callable reject;
 
+  public interface ResultCallback {
+    void deliver(Context cx, Scriptable scope, Object result);
+  }
+
   private PromiseAdapter(NativePromise p, Callable resolve, Callable reject) {
     this.promise = p;
     this.resolve = resolve;
@@ -23,42 +27,61 @@ public class PromiseAdapter {
   }
 
   /**
-   * Return an object that may be used to take action when a JavaScript promise is resolved or
-   * rejected, or throw a TypeError if the supplied object is not a Promise.
+   * Register a callback that will be called when the promise resolves.
    */
-  public static CompletableFuture<Object> toFuture(Context cx, Scriptable scope, Object promise) {
-    if (!(promise instanceof NativePromise)) {
-      throw ScriptRuntime.typeError("A Promise object must be supplied");
-    }
-    var p = (NativePromise) promise;
-    var f = new CompletableFuture<Object>();
+  public void then(Context cx, Scriptable scope, ResultCallback cb) {
     var resolve =
-        new LambdaFunction(
-            scope,
-            "resolve",
-            1,
-            (lcx, ls, to, args) -> {
-              var val = args.length > 0 ? args[0] : Undefined.instance;
-              f.complete(val);
-              return Undefined.instance;
-            });
+            new LambdaFunction(
+                    scope,
+                    "resolve",
+                    1,
+                    (lcx, ls, to, args) -> {
+                      var val = args.length > 0 ? args[0] : Undefined.instance;
+                      cb.deliver(lcx, ls, val);
+                      return Undefined.instance;
+                    });
+    var then = (Callable) ScriptableObject.getProperty(promise, "then");
+    then.call(cx, scope, promise, new Object[] {resolve});
+  }
+
+  /**
+   * Register a callback that will be called when the promise resolves.
+   */
+  public void then(Context cx, Scriptable scope, ResultCallback resolveCb, ResultCallback rejectCb) {
+    var resolve =
+            new LambdaFunction(
+                    scope,
+                    "resolve",
+                    1,
+                    (lcx, ls, to, args) -> {
+                      var val = args.length > 0 ? args[0] : Undefined.instance;
+                      resolveCb.deliver(lcx, ls, val);
+                      return Undefined.instance;
+                    });
     var reject =
-        new LambdaFunction(
-            scope,
-            "reject",
-            1,
-            (lcx, ls, to, args) -> {
-              var val = args.length > 0 ? args[0] : Undefined.instance;
-              if (val instanceof Throwable) {
-                f.completeExceptionally((Throwable) val);
-              } else {
-                f.completeExceptionally(new RejectedPromiseException(val));
-              }
-              return Undefined.instance;
-            });
-    var then = (Callable) ScriptableObject.getProperty(p, "then");
-    then.call(cx, scope, p, new Object[] {resolve, reject});
-    return f;
+            new LambdaFunction(
+                    scope,
+                    "reject",
+                    1,
+                    (lcx, ls, to, args) -> {
+                      var val = args.length > 0 ? args[0] : Undefined.instance;
+                      rejectCb.deliver(lcx, ls, val);
+                      return Undefined.instance;
+                    });
+    var then = (Callable) ScriptableObject.getProperty(promise, "then");
+    then.call(cx, scope, promise, new Object[] {resolve, reject});
+  }
+
+  /**
+   * Wrap a Promise or an ordinary object. If a promise, then the
+   * adapter may be used with that promise. If a regular value, then
+   * the adapter will be backed by a promise that is already resolved.
+   */
+  public static PromiseAdapter wrap(Context cx, Scriptable scope, Object val) {
+    if (val instanceof NativePromise pv) {
+      return new PromiseAdapter(pv, null, null);
+    }
+    return resolved(cx, scope, val);
   }
 
   /** Create a new, uninitialized promise. */

@@ -1,9 +1,13 @@
 package org.brail.jwhat.stream;
 
 import java.util.ArrayList;
+
+import org.mozilla.javascript.Callable;
 import org.mozilla.javascript.Constructable;
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.LambdaConstructor;
+import org.mozilla.javascript.LambdaFunction;
+import org.mozilla.javascript.NativeFunction;
 import org.mozilla.javascript.NativePromise;
 import org.mozilla.javascript.ScriptRuntime;
 import org.mozilla.javascript.Scriptable;
@@ -31,13 +35,14 @@ public class WritableStream extends ScriptableObject {
 
   public static void init(Context cx, Scriptable scope) {
     var writerConstructor = DefaultWriter.init(cx, scope);
+    var controllerConstructor = WritableController.init(cx, scope);
     var constructor =
         new LambdaConstructor(
             scope,
             "WritableStream",
             2,
             LambdaConstructor.CONSTRUCTOR_DEFAULT,
-            WritableStream::constructor);
+            (lcx, ls, args) -> constructor(lcx, ls, args, controllerConstructor));
     constructor.setPrototypePropertyAttributes(DONTENUM | READONLY | PERMANENT);
 
     constructor.definePrototypeMethod(scope, "abort", 0, WritableStream::abort);
@@ -62,8 +67,16 @@ public class WritableStream extends ScriptableObject {
     return LambdaConstructor.convertThisObject(thisObj, WritableStream.class);
   }
 
-  private static Scriptable constructor(Context cx, Scriptable scope, Object[] args) {
-    return new WritableStream();
+  private static Scriptable constructor(Context cx, Scriptable scope, Object[] args,
+                                        Constructable controllerCons) {
+    Object sink = args.length > 0 ? args[0] : null;
+    Object strategy = args.length > 1 ? args[1] : null;
+    var ws = new WritableStream();
+    ws.controller = (WritableController)controllerCons.construct(cx, scope, ScriptRuntime.emptyArgs);
+    ws.controller.setUp(cx, scope, sink, ws,
+      getSizeStrategy(scope, strategy),
+      getHighWaterStrategy(strategy));
+    return ws;
   }
 
   private static Object abort(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
@@ -83,7 +96,7 @@ public class WritableStream extends ScriptableObject {
     var writer =
         (DefaultWriter)
             writerConstructor.construct(
-                Context.getCurrentContext(), scope, ScriptRuntime.emptyArgs);
+                cx, scope, ScriptRuntime.emptyArgs);
     writer.setUp(cx, scope, self);
     self.writer = writer;
     return writer;
@@ -101,8 +114,34 @@ public class WritableStream extends ScriptableObject {
     return backpressure;
   }
 
+  void setBackpressure(boolean bp) {
+    this.backpressure = bp;
+  }
+
   Object getError() {
     return error;
+  }
+
+  private static Callable getSizeStrategy(Scriptable scope, Object stratObj) {
+    if (stratObj instanceof Scriptable strategy) {
+      Object sizeObj = ScriptableObject.getProperty(strategy, "size");
+      if (sizeObj instanceof Callable sizeFunc) {
+        return sizeFunc;
+      }
+    }
+    return new LambdaFunction(scope, "getSize", 0, (cx1, scope1, thisObj, args) -> 1);
+  }
+
+  private static double getHighWaterStrategy(Object stratObj) {
+    if (stratObj instanceof Scriptable strategy) {
+      Object hwmObj = ScriptableObject.getProperty(strategy, "highWaterMark");
+      double val = ScriptRuntime.toNumber(hwmObj);
+      if (Double.isNaN(val) || val < 0.0) {
+        throw ScriptRuntime.rangeError("Invalid HWM");
+      }
+      return val;
+    }
+    return 1.0;
   }
 
   private static final class PendingAbort {}

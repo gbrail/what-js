@@ -1,6 +1,6 @@
 #!/bin/sh
 
-testdirs='url console streams'
+testdirs='url console streams dom/abort'
 
 for d in ${testdirs}
 do

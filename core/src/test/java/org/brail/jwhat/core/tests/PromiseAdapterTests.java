@@ -1,6 +1,7 @@
 package org.brail.jwhat.core.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -109,51 +110,47 @@ public class PromiseAdapterTests {
   }
 
   @Test
-  public void testFutureSuccess() {
+  public void testThenCallback() {
     scope.put("ResolveFunc", scope, null);
     scope.put("p", scope, null);
     cx.evaluateString(
-        scope,
-        """
-            p = new Promise((resolve, reject) => { ResolveFunc = resolve; });
-            """,
-        "test.js",
-        1,
-        null);
+            scope,
+            """
+                p = new Promise((resolve, reject) => { ResolveFunc = resolve; });
+                """,
+            "test.js",
+            1,
+            null);
     var p = scope.get("p", scope);
-    var f = PromiseAdapter.toFuture(cx, scope, p);
+    var pa = PromiseAdapter.wrap(cx, scope, p);
     AtomicBoolean done = new AtomicBoolean();
-    var unused =
-        f.thenRun(
-            () -> {
-              done.set(true);
-            });
+    pa.then(cx, scope,
+            (lcx, ls, val) -> done.set(true));
     cx.evaluateString(scope, "ResolveFunc('Done');", "test.js", 1, null);
     assertTrue(done.get());
   }
 
   @Test
-  public void testFutureException() {
-    scope.put("RejectFunc", scope, null);
+  public void testThenCallbackReject() {
+    scope.put("RejectFund", scope, null);
     scope.put("p", scope, null);
     cx.evaluateString(
-        scope,
-        """
-            p = new Promise((resolve, reject) => { RejectFunc = reject; });
-            """,
-        "test.js",
-        1,
-        null);
+            scope,
+            """
+                p = new Promise((resolve, reject) => { RejectFunc = reject; });
+                """,
+            "test.js",
+            1,
+            null);
     var p = scope.get("p", scope);
-    var f = PromiseAdapter.toFuture(cx, scope, p);
-    AtomicBoolean done = new AtomicBoolean();
-    var unused =
-        f.exceptionally(
-            (t) -> {
-              done.set(true);
-              return null;
-            });
-    cx.evaluateString(scope, "RejectFunc(new Error('error'));", "test.js", 1, null);
-    assertTrue(done.get());
+    var pa = PromiseAdapter.wrap(cx, scope, p);
+    AtomicBoolean resolved = new AtomicBoolean();
+    AtomicBoolean rejected = new AtomicBoolean();
+    pa.then(cx, scope,
+            (lcx, ls, val) -> resolved.set(true),
+            (lcx, ls, val) -> rejected.set(true));
+    cx.evaluateString(scope, "RejectFunc('Done');", "test.js", 1, null);
+    assertTrue(rejected.get());
+    assertFalse(resolved.get());
   }
 }
