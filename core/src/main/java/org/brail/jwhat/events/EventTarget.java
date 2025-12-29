@@ -1,5 +1,9 @@
 package org.brail.jwhat.events;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Objects;
 import org.mozilla.javascript.Callable;
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.LambdaConstructor;
@@ -8,27 +12,14 @@ import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
 import org.mozilla.javascript.Undefined;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Objects;
-
 public class EventTarget extends ScriptableObject {
-  private final HashMap<String, List<Listener>> listeners =
-          new HashMap<>();
+  private final HashMap<String, List<Listener>> listeners = new HashMap<>();
 
   public static void init(Context cx, Scriptable scope) {
-    var c = new LambdaConstructor(
-            scope,
-            "EventTarget",
-            0,
-            EventTarget::constructor);
-    c.definePrototypeMethod(scope, "addEventListener", 2,
-            EventTarget::addListener);
-    c.definePrototypeMethod(scope, "removeEventListener", 2,
-            EventTarget::removeListener);
-    c.definePrototypeMethod(scope, "dispatchEvent", 1,
-            EventTarget::dispatch);
+    var c = new LambdaConstructor(scope, "EventTarget", 0, EventTarget::constructor);
+    c.definePrototypeMethod(scope, "addEventListener", 2, EventTarget::addListener);
+    c.definePrototypeMethod(scope, "removeEventListener", 2, EventTarget::removeListener);
+    c.definePrototypeMethod(scope, "dispatchEvent", 1, EventTarget::dispatch);
     ScriptableObject.defineProperty(scope, "EventTarget", c, DONTENUM);
   }
 
@@ -47,7 +38,8 @@ public class EventTarget extends ScriptableObject {
     return new EventTarget();
   }
 
-  private static Object addListener(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+  private static Object addListener(
+      Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
     if (args.length < 2) {
       return Undefined.instance;
     }
@@ -59,23 +51,28 @@ public class EventTarget extends ScriptableObject {
     if (!(tb instanceof Callable)) {
       return Undefined.instance;
     }
-    var listener = new Listener(type, target, (Callable)tb);
-    realThis(thisObj).listeners.compute(type, (k, l) -> {
-      ArrayList<Listener> listeners;
-      if (l == null) {
-        listeners = new ArrayList<>();
-      } else {
-        listeners = (ArrayList<Listener>)l;
-      }
-      if (!listeners.contains(listener)) {
-        listeners.add(listener);
-      }
-      return listeners;
-    });
+    var listener = new Listener(type, target, (Callable) tb);
+    realThis(thisObj)
+        .listeners
+        .compute(
+            type,
+            (k, l) -> {
+              ArrayList<Listener> listeners;
+              if (l == null) {
+                listeners = new ArrayList<>();
+              } else {
+                listeners = (ArrayList<Listener>) l;
+              }
+              if (!listeners.contains(listener)) {
+                listeners.add(listener);
+              }
+              return listeners;
+            });
     return Undefined.instance;
   }
 
-  private static Object removeListener(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+  private static Object removeListener(
+      Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
     if (args.length < 2) {
       return Undefined.instance;
     }
@@ -87,7 +84,7 @@ public class EventTarget extends ScriptableObject {
     if (!(tb instanceof Callable)) {
       return Undefined.instance;
     }
-    var listener = new Listener(type, target, (Callable)tb);
+    var listener = new Listener(type, target, (Callable) tb);
     var listeners = realThis(thisObj).listeners.get(type);
     listeners.remove(listener);
     return Undefined.instance;
@@ -110,7 +107,7 @@ public class EventTarget extends ScriptableObject {
       return false;
     }
     for (var l : listeners) {
-      l.callback.call(cx, scope, l.target, new Object[] { event });
+      l.callback.call(cx, scope, l.target, new Object[] {event});
     }
     return true;
   }

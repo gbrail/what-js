@@ -11,11 +11,7 @@ public class Event extends ScriptableObject {
   private EventTarget target;
 
   public static void init(Context cx, Scriptable scope) {
-    var c = new LambdaConstructor(
-            scope,
-            "Event",
-            1,
-            Event::constructor);
+    var c = new LambdaConstructor(scope, "Event", 1, Event::constructor);
     c.definePrototypeProperty(cx, "type", Event::getType);
     c.definePrototypeProperty(cx, "target", Event::getTarget);
     ScriptableObject.defineProperty(scope, "Event", c, DONTENUM);

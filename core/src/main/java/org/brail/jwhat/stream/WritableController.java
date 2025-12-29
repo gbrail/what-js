@@ -6,12 +6,11 @@ import org.mozilla.javascript.Callable;
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.LambdaConstructor;
 import org.mozilla.javascript.LambdaFunction;
+import org.mozilla.javascript.RhinoException;
 import org.mozilla.javascript.ScriptRuntime;
 import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
 import org.mozilla.javascript.Undefined;
-
-import java.util.ArrayDeque;
 
 class WritableController extends ScriptableObject {
   private WritableStream stream;
@@ -23,7 +22,7 @@ class WritableController extends ScriptableObject {
   private Scriptable sink;
   // TODO controller class
   private AbortController abortController;
-  private final ArrayDeque<Object> chunks = new ArrayDeque<>();
+  private final QueueWithSize<Object> writeQueue = new QueueWithSize<>();
   private long queueSize;
   private double strategyHwm;
   private boolean started;
@@ -32,12 +31,12 @@ class WritableController extends ScriptableObject {
 
   public static LambdaConstructor init(Context cx, Scriptable scope) {
     var constructor =
-            new LambdaConstructor(
-                    scope,
-                    "WritableStreamDefaultController",
-                    0,
-                    LambdaConstructor.CONSTRUCTOR_DEFAULT,
-                    WritableController::constructor);
+        new LambdaConstructor(
+            scope,
+            "WritableStreamDefaultController",
+            0,
+            LambdaConstructor.CONSTRUCTOR_DEFAULT,
+            WritableController::constructor);
     constructor.setPrototypePropertyAttributes(DONTENUM | READONLY | PERMANENT);
 
     constructor.definePrototypeMethod(scope, "error", 1, WritableController::error);
@@ -48,6 +47,10 @@ class WritableController extends ScriptableObject {
   @Override
   public String getClassName() {
     return "WritableStreamDefaultController";
+  }
+
+  AbortController getAbortController() {
+    return abortController;
   }
 
   private static WritableController realThis(Scriptable thisObj) {
@@ -66,30 +69,37 @@ class WritableController extends ScriptableObject {
     return Undefined.instance;
   }
 
-  void setUp(Context cx, Scriptable scope, Object sinkObj, WritableStream stream,
-             Callable sizeCb, double hwm) {
+  void setUp(
+      Context cx,
+      Scriptable scope,
+      Object sinkObj,
+      WritableStream stream,
+      Callable sizeCb,
+      double hwm) {
     this.stream = stream;
-    this.abortController = (AbortController)cx.newObject(scope, "AbortController");
+    this.abortController = (AbortController) cx.newObject(scope, "AbortController");
     this.getSizeCb = sizeCb;
     this.strategyHwm = hwm;
     // Works because queue should be empty now...
     stream.setBackpressure(hwm <= 0.0);
     setUpSink(cx, scope, sinkObj);
-    var sa = PromiseAdapter.wrap(cx, scope,
-            startCb.call(cx, scope, sink, new Object[] { this }));
-    sa.then(cx, scope, (lcx, ls, val) -> {
-      started = true;
-      // TODO AdvanceQueueIfNeeded
-    },
-            (lcx, ls, val) -> {
-      started = true;
-      // TODO DealWithRejection
-            });
+    var sa = PromiseAdapter.wrap(cx, scope, startCb.call(cx, scope, sink, new Object[] {this}));
+    sa.then(
+        cx,
+        scope,
+        (lcx, ls, val) -> {
+          started = true;
+          advanceQueueIfNeeded();
+        },
+        (lcx, ls, val) -> {
+          started = true;
+          dealWithRejection(val);
+        });
   }
 
   private void setUpSink(Context cx, Scriptable scope, Object sinkObj) {
-    var returnUndefined = new LambdaFunction(scope, "default", 0,
-            (lcx, ls, to, args) -> Undefined.instance);
+    var returnUndefined =
+        new LambdaFunction(scope, "default", 0, (lcx, ls, to, args) -> Undefined.instance);
     this.startCb = returnUndefined;
     if (sinkObj == null) {
       return;
@@ -105,5 +115,75 @@ class WritableController extends ScriptableObject {
       this.startCb = start;
     }
     // TODO other three CBs
+  }
+
+  private void advanceQueueIfNeeded() {
+    if (started || stream.getInFlightWriteRequest() != null) {
+      return;
+    }
+    if (stream.getStreamState() == WritableStream.State.ERRORING) {
+      stream.finishErroring();
+      return;
+    }
+    if (writeQueue.isEmpty()) {
+      return;
+    }
+    if (writeQueue.peek() == CLOSE_SENTINEL) {
+      processClose();
+    } else {
+      processWrite();
+    }
+  }
+
+  private void dealWithRejection(Object error) {
+    if (stream.getStreamState() == WritableStream.State.WRITABLE) {
+      stream.startErroring(error);
+    } else {
+      stream.finishErroring();
+    }
+  }
+
+  // WritableStreamDefaultControllerWrite
+  void doWrite(Context cx, Scriptable scope, Object chunk, double chunkSize) {
+    try {
+      writeQueue.enqueue(cx, scope, chunk, chunkSize);
+    } catch (RhinoException re) {
+      errorIfNeeded(re);
+      return;
+    }
+    if (!stream.isCloseQueuedOrInFlight()
+        && stream.getStreamState() == WritableStream.State.WRITABLE) {
+      stream.updateBackpressure(getBackpressure());
+    }
+    advanceQueueIfNeeded();
+  }
+
+  // WritableStreamDefaultControllerGetChunkSize
+  double getChunkSize() {
+    throw new AssertionError("WritableStreamDefaultControllerGetChunkSize");
+  }
+
+  Object getDesiredSize() {
+    throw new AssertionError("WritableStreamDefaultControllerGetDesiredSize");
+  }
+
+  boolean getBackpressure() {
+    throw new AssertionError("WritableStreamDefaultControllerGetBackpressure");
+  }
+
+  void doClose() {
+    throw new AssertionError("WritableStreamDefaultControllerClose");
+  }
+
+  private void processClose() {
+    throw new AssertionError("WritableStreamDefaultControllerProcessClose");
+  }
+
+  private void processWrite() {
+    throw new AssertionError("WritableStreamDefaultControllerProcessWrite");
+  }
+
+  private void errorIfNeeded(Object err) {
+    throw new AssertionError("WritableStreamDefaultControllerErrorIfNeeded");
   }
 }

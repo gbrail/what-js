@@ -1,12 +1,10 @@
 package org.brail.jwhat.core.impl;
 
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 import org.mozilla.javascript.Callable;
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.LambdaFunction;
 import org.mozilla.javascript.NativePromise;
-import org.mozilla.javascript.ScriptRuntime;
 import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
 import org.mozilla.javascript.Undefined;
@@ -15,6 +13,7 @@ public class PromiseAdapter {
   private final NativePromise promise;
   private final Callable resolve;
   private final Callable reject;
+  private boolean pending;
 
   public interface ResultCallback {
     void deliver(Context cx, Scriptable scope, Object result);
@@ -26,56 +25,53 @@ public class PromiseAdapter {
     this.reject = reject;
   }
 
-  /**
-   * Register a callback that will be called when the promise resolves.
-   */
+  /** Register a callback that will be called when the promise resolves. */
   public void then(Context cx, Scriptable scope, ResultCallback cb) {
     var resolve =
-            new LambdaFunction(
-                    scope,
-                    "resolve",
-                    1,
-                    (lcx, ls, to, args) -> {
-                      var val = args.length > 0 ? args[0] : Undefined.instance;
-                      cb.deliver(lcx, ls, val);
-                      return Undefined.instance;
-                    });
+        new LambdaFunction(
+            scope,
+            "resolve",
+            1,
+            (lcx, ls, to, args) -> {
+              var val = args.length > 0 ? args[0] : Undefined.instance;
+              cb.deliver(lcx, ls, val);
+              return Undefined.instance;
+            });
     var then = (Callable) ScriptableObject.getProperty(promise, "then");
     then.call(cx, scope, promise, new Object[] {resolve});
   }
 
-  /**
-   * Register a callback that will be called when the promise resolves.
-   */
-  public void then(Context cx, Scriptable scope, ResultCallback resolveCb, ResultCallback rejectCb) {
+  /** Register a callback that will be called when the promise resolves. */
+  public void then(
+      Context cx, Scriptable scope, ResultCallback resolveCb, ResultCallback rejectCb) {
     var resolve =
-            new LambdaFunction(
-                    scope,
-                    "resolve",
-                    1,
-                    (lcx, ls, to, args) -> {
-                      var val = args.length > 0 ? args[0] : Undefined.instance;
-                      resolveCb.deliver(lcx, ls, val);
-                      return Undefined.instance;
-                    });
+        new LambdaFunction(
+            scope,
+            "resolve",
+            1,
+            (lcx, ls, to, args) -> {
+              var val = args.length > 0 ? args[0] : Undefined.instance;
+              resolveCb.deliver(lcx, ls, val);
+              return Undefined.instance;
+            });
     var reject =
-            new LambdaFunction(
-                    scope,
-                    "reject",
-                    1,
-                    (lcx, ls, to, args) -> {
-                      var val = args.length > 0 ? args[0] : Undefined.instance;
-                      rejectCb.deliver(lcx, ls, val);
-                      return Undefined.instance;
-                    });
+        new LambdaFunction(
+            scope,
+            "reject",
+            1,
+            (lcx, ls, to, args) -> {
+              var val = args.length > 0 ? args[0] : Undefined.instance;
+              rejectCb.deliver(lcx, ls, val);
+              return Undefined.instance;
+            });
     var then = (Callable) ScriptableObject.getProperty(promise, "then");
     then.call(cx, scope, promise, new Object[] {resolve, reject});
   }
 
   /**
-   * Wrap a Promise or an ordinary object. If a promise, then the
-   * adapter may be used with that promise. If a regular value, then
-   * the adapter will be backed by a promise that is already resolved.
+   * Wrap a Promise or an ordinary object. If a promise, then the adapter may be used with that
+   * promise. If a regular value, then the adapter will be backed by a promise that is already
+   * resolved.
    */
   public static PromiseAdapter wrap(Context cx, Scriptable scope, Object val) {
     if (val instanceof NativePromise pv) {
@@ -101,7 +97,9 @@ public class PromiseAdapter {
             });
     var p = (NativePromise) cx.newObject(scope, "Promise", new Object[] {setup});
     // Promise contract says that "setup" should be called immediately.
-    return new PromiseAdapter(p, resolve.get(), reject.get());
+    var a = new PromiseAdapter(p, resolve.get(), reject.get());
+    a.pending = true;
+    return a;
   }
 
   /** Create a promise that is already resolved. */
@@ -126,11 +124,21 @@ public class PromiseAdapter {
   }
 
   /**
+   * Return true if the promise hasn't been resolved yet. TODO This is not sufficient -- we need
+   * real support in PromiseImpl for this to be accurate. Only works currently with promises created
+   * by this class.
+   */
+  public boolean isPending() {
+    return pending;
+  }
+
+  /**
    * Deliver a result to this promise and resolve it. It is invalid to call this if "resolved" or
    * "rejected" was used.
    */
   public void fulfill(Context cx, Scriptable scope, Object value) {
     assert resolve != null;
+    pending = false;
     resolve.call(cx, scope, promise, new Object[] {value});
   }
 
@@ -140,6 +148,7 @@ public class PromiseAdapter {
    */
   public void reject(Context cx, Scriptable scope, Object error) {
     assert reject != null;
+    pending = false;
     reject.call(cx, scope, promise, new Object[] {error});
   }
 }

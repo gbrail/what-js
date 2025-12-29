@@ -12,19 +12,12 @@ public class AbortSignal extends ScriptableObject {
   Object reason = Undefined.instance;
 
   public static void init(Context cx, Scriptable scope) {
-    var c = new LambdaConstructor(
-            scope,
-            "AbortSignal",
-            0,
-            AbortSignal::constructor);
-    c.defineConstructorMethod(scope, "abort", 1, (lcx, ls, to, args) ->
-      abort(lcx, ls, args, c)
-    );
+    var c = new LambdaConstructor(scope, "AbortSignal", 0, AbortSignal::constructor);
+    c.defineConstructorMethod(scope, "abort", 1, (lcx, ls, to, args) -> abort(lcx, ls, args, c));
     ScriptableObject.defineProperty(scope, "AbortSignal", c, DONTENUM);
   }
 
-  private AbortSignal() {
-  }
+  private AbortSignal() {}
 
   @Override
   public String getClassName() {
@@ -49,8 +42,19 @@ public class AbortSignal extends ScriptableObject {
     }
   }
 
-  private static Object abort(Context cx, Scriptable scope, Object[] args, Constructable constructor) {
-    var s = (AbortSignal)constructor.construct(cx, scope, args);
+  static Object getAbortReason(Object arg) {
+    Object reason;
+    if (Undefined.isUndefined(arg)) {
+      // TODO should be a "DOM Exception"
+      return "AbortError";
+    } else {
+      return arg;
+    }
+  }
+
+  private static Object abort(
+      Context cx, Scriptable scope, Object[] args, Constructable constructor) {
+    var s = (AbortSignal) constructor.construct(cx, scope, args);
     s.reason = getAbortReason(args);
     return s;
   }

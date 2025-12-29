@@ -1,5 +1,8 @@
 package org.brail.jwhat.core.tests;
 
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.io.IOException;
 import org.brail.jwhat.events.Events;
 import org.brail.jwhat.framework.WPTTestLauncher;
 import org.junit.jupiter.api.AfterAll;
@@ -7,10 +10,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mozilla.javascript.Context;
-
-import java.io.IOException;
-
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class AbortTests {
   private static Context cx;

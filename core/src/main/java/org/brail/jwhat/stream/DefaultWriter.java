@@ -3,6 +3,7 @@ package org.brail.jwhat.stream;
 import org.brail.jwhat.core.impl.PromiseAdapter;
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.LambdaConstructor;
+import org.mozilla.javascript.ScriptRuntime;
 import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
 import org.mozilla.javascript.Undefined;
@@ -62,10 +63,14 @@ class DefaultWriter extends ScriptableObject {
         closed = PromiseAdapter.rejected(cx, scope, stream.getError());
         break;
       case CLOSED:
-        ready = PromiseAdapter.rejected(cx, scope, Undefined.instance);
-        closed = PromiseAdapter.rejected(cx, scope, Undefined.instance);
+        ready = PromiseAdapter.resolved(cx, scope, Undefined.instance);
+        closed = PromiseAdapter.resolved(cx, scope, Undefined.instance);
         break;
     }
+  }
+
+  PromiseAdapter getReadyPromise() {
+    return ready;
   }
 
   private static Scriptable constructor(Context cx, Scriptable scope, Object[] args) {
@@ -73,20 +78,63 @@ class DefaultWriter extends ScriptableObject {
   }
 
   private static Object abort(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
-    return Undefined.instance;
+    var self = realThis(thisObj);
+    if (self.stream == null) {
+      throw ScriptRuntime.typeError("Cannot abort: no stream");
+    }
+    var reason = args.length > 0 ? args[0] : Undefined.instance;
+    return self.stream.abort(cx, scope, reason);
   }
 
   private static Object close(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
-    return Undefined.instance;
+    var self = realThis(thisObj);
+    if (self.stream == null) {
+      throw ScriptRuntime.typeError("Cannot close: no stream");
+    }
+    if (self.stream.isCloseQueuedOrInFlight()) {
+      return PromiseAdapter.rejected(cx, scope, ScriptRuntime.typeError("Close in flight"));
+    }
+    return self.stream.doClose(cx, scope);
   }
 
   private static Object releaseLock(
       Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+    var self = realThis(thisObj);
+    var err = ScriptRuntime.typeError("Stream released");
+    self.ensureReadyRejected(cx, scope, err);
+    self.ensureCloseRejected(cx, scope, err);
+    self.stream.setWriter(null);
+    self.stream = null;
     return Undefined.instance;
   }
 
   private static Object write(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
-    return Undefined.instance;
+    var self = realThis(thisObj);
+    if (self.stream == null) {
+      throw ScriptRuntime.typeError("Cannot write: no stream");
+    }
+    Object chunk = args.length > 0 ? args[0] : Undefined.instance;
+    return self.doWrite(cx, scope, chunk);
+  }
+
+  // WritableStreamDefaultWriterWrite
+  private Object doWrite(Context cx, Scriptable scope, Object chunk) {
+    var chunkSize = stream.getController().getChunkSize();
+    switch (stream.getStreamState()) {
+      case ERRORED:
+      case ERRORING:
+        return PromiseAdapter.rejected(cx, scope, stream.getError()).getPromise();
+      case CLOSED:
+        return PromiseAdapter.rejected(
+                cx, scope, ScriptRuntime.typeError("Stream closing or closed"))
+            .getPromise();
+      case WRITABLE:
+        var p = stream.addWriteRequest(cx, scope);
+        stream.getController().doWrite(cx, scope, chunk, chunkSize);
+        return p.getPromise();
+      default:
+        throw new IllegalStateException();
+    }
   }
 
   private static Object getClosed(Scriptable thisObj) {
@@ -100,6 +148,26 @@ class DefaultWriter extends ScriptableObject {
   }
 
   private static Object getDesiredSize(Scriptable thisObj) {
-    return Undefined.instance;
+    var self = realThis(thisObj);
+    if (self.stream == null) {
+      throw ScriptRuntime.typeError("Stream closed");
+    }
+    return switch (self.stream.getStreamState()) {
+      case ERRORED, ERRORING -> null;
+      case CLOSED -> 0;
+      default -> self.stream.getController().getDesiredSize();
+    };
+  }
+
+  private void ensureReadyRejected(Context cx, Scriptable scope, Object val) {
+    if (ready.isPending()) {
+      ready.reject(cx, scope, val);
+    }
+  }
+
+  private void ensureCloseRejected(Context cx, Scriptable scope, Object val) {
+    if (closed.isPending()) {
+      closed.reject(cx, scope, val);
+    }
   }
 }

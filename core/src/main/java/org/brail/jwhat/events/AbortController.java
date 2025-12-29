@@ -10,11 +10,7 @@ public class AbortController extends ScriptableObject {
   private final AbortSignal signal;
 
   public static void init(Context cx, Scriptable scope) {
-    var c = new LambdaConstructor(
-            scope,
-            "AbortController",
-            0,
-            AbortController::constructor);
+    var c = new LambdaConstructor(scope, "AbortController", 0, AbortController::constructor);
     c.definePrototypeProperty(cx, "signal", AbortController::getSignal);
     c.definePrototypeMethod(scope, "abort", 1, AbortController::abort);
     ScriptableObject.defineProperty(scope, "AbortController", c, DONTENUM);
@@ -34,13 +30,19 @@ public class AbortController extends ScriptableObject {
   }
 
   private static Scriptable constructor(Context cx, Scriptable scope, Object[] args) {
-    var signal = (AbortSignal)cx.newObject(scope, "AbortSignal");
+    var signal = (AbortSignal) cx.newObject(scope, "AbortSignal");
     return new AbortController(signal);
   }
 
   private static Object abort(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
-    realThis(thisObj).signal.reason = AbortSignal.getAbortReason(args);
+    Object arg = args.length > 0 ? args[0] : Undefined.instance;
+    realThis(thisObj).abort(arg);
     return Undefined.instance;
+  }
+
+  public void abort(Object arg) {
+    signal.reason = AbortSignal.getAbortReason(arg);
+    // TODO certainly quite a bit!
   }
 
   private static Object getSignal(Scriptable thisObj) {

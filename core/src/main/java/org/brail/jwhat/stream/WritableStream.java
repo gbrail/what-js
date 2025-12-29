@@ -1,14 +1,12 @@
 package org.brail.jwhat.stream;
 
 import java.util.ArrayList;
-
+import org.brail.jwhat.core.impl.PromiseAdapter;
 import org.mozilla.javascript.Callable;
 import org.mozilla.javascript.Constructable;
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.LambdaConstructor;
 import org.mozilla.javascript.LambdaFunction;
-import org.mozilla.javascript.NativeFunction;
-import org.mozilla.javascript.NativePromise;
 import org.mozilla.javascript.ScriptRuntime;
 import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
@@ -24,14 +22,14 @@ public class WritableStream extends ScriptableObject {
 
   State state = State.WRITABLE;
   private boolean backpressure;
-  private NativePromise closeRequest;
-  private NativePromise inFlightCloseRequest;
+  private PromiseAdapter closeRequest;
+  private PromiseAdapter inFlightCloseRequest;
   private WritableController controller;
-  private NativePromise inFlightWriteRequest;
+  private PromiseAdapter inFlightWriteRequest;
   private PendingAbort pendingAbort;
   private Object error;
   private DefaultWriter writer = null;
-  private final ArrayList<NativePromise> writeRequests = new ArrayList<>();
+  private final ArrayList<PromiseAdapter> writeRequests = new ArrayList<>();
 
   public static void init(Context cx, Scriptable scope) {
     var writerConstructor = DefaultWriter.init(cx, scope);
@@ -67,24 +65,69 @@ public class WritableStream extends ScriptableObject {
     return LambdaConstructor.convertThisObject(thisObj, WritableStream.class);
   }
 
-  private static Scriptable constructor(Context cx, Scriptable scope, Object[] args,
-                                        Constructable controllerCons) {
+  private static Scriptable constructor(
+      Context cx, Scriptable scope, Object[] args, Constructable controllerCons) {
     Object sink = args.length > 0 ? args[0] : null;
     Object strategy = args.length > 1 ? args[1] : null;
     var ws = new WritableStream();
-    ws.controller = (WritableController)controllerCons.construct(cx, scope, ScriptRuntime.emptyArgs);
-    ws.controller.setUp(cx, scope, sink, ws,
-      getSizeStrategy(scope, strategy),
-      getHighWaterStrategy(strategy));
+    ws.controller =
+        (WritableController) controllerCons.construct(cx, scope, ScriptRuntime.emptyArgs);
+    ws.controller.setUp(
+        cx, scope, sink, ws, getSizeStrategy(scope, strategy), getHighWaterStrategy(strategy));
     return ws;
   }
 
   private static Object abort(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
-    return Undefined.instance;
+    var reason = args.length > 0 ? args[0] : Undefined.instance;
+    var self = realThis(thisObj);
+    if (self.isLocked()) {
+      throw ScriptRuntime.typeError("Writable stream is locked");
+    }
+    self.controller.getAbortController().abort(reason);
+    return self.abort(cx, scope, reason);
+  }
+
+  // WritableStreamAbort
+  Object abort(Context cx, Scriptable scope, Object reason) {
+    if (state == State.CLOSED || state == State.ERRORED) {
+      return PromiseAdapter.resolved(cx, scope, Undefined.instance);
+    }
+    if (pendingAbort != null) {
+      return pendingAbort.promise.getPromise();
+    }
+    boolean wasAlreadyErroring = false;
+    if (state == State.ERRORING) {
+      wasAlreadyErroring = true;
+      reason = Undefined.instance;
+    }
+    var promise = PromiseAdapter.uninitialized(cx, scope);
+    pendingAbort = new PendingAbort(promise, reason, wasAlreadyErroring);
+    if (!wasAlreadyErroring) {
+      startErroring(reason);
+    }
+    return promise.getPromise();
   }
 
   private static Object close(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
-    return Undefined.instance;
+    var self = realThis(thisObj);
+    if (self.isLocked() || self.isCloseQueuedOrInFlight()) {
+      return PromiseAdapter.rejected(cx, scope, ScriptRuntime.typeError("Closing a locked stream"));
+    }
+    return self.doClose(cx, scope);
+  }
+
+  // WritableStreamClose
+  Object doClose(Context cx, Scriptable scope) {
+    if (state == State.CLOSED || state == State.ERRORED) {
+      return PromiseAdapter.resolved(cx, scope, Undefined.instance);
+    }
+    var promise = PromiseAdapter.uninitialized(cx, scope);
+    closeRequest = promise;
+    if (writer != null && backpressure && state == State.WRITABLE) {
+      writer.getReadyPromise().fulfill(cx, scope, Undefined.instance);
+    }
+    controller.doClose();
+    return promise.getPromise();
   }
 
   private static Object getWriter(
@@ -93,17 +136,30 @@ public class WritableStream extends ScriptableObject {
     if (self.writer != null) {
       throw ScriptRuntime.typeError("Stream is locked");
     }
-    var writer =
-        (DefaultWriter)
-            writerConstructor.construct(
-                cx, scope, ScriptRuntime.emptyArgs);
+    var writer = (DefaultWriter) writerConstructor.construct(cx, scope, ScriptRuntime.emptyArgs);
     writer.setUp(cx, scope, self);
     self.writer = writer;
     return writer;
   }
 
   private static Object isLocked(Scriptable thisObj) {
-    return Undefined.instance;
+    return realThis(thisObj).isLocked();
+  }
+
+  void setWriter(DefaultWriter writer) {
+    this.writer = writer;
+  }
+
+  State getStreamState() {
+    return state;
+  }
+
+  WritableController getController() {
+    return controller;
+  }
+
+  boolean isLocked() {
+    return writer != null;
   }
 
   boolean isCloseQueuedOrInFlight() {
@@ -118,8 +174,16 @@ public class WritableStream extends ScriptableObject {
     this.backpressure = bp;
   }
 
+  void updateBackpressure(boolean bp) {
+    throw new AssertionError("WritableStream&UpdateBackpressure");
+  }
+
   Object getError() {
     return error;
+  }
+
+  PromiseAdapter getInFlightWriteRequest() {
+    return inFlightWriteRequest;
   }
 
   private static Callable getSizeStrategy(Scriptable scope, Object stratObj) {
@@ -144,5 +208,30 @@ public class WritableStream extends ScriptableObject {
     return 1.0;
   }
 
-  private static final class PendingAbort {}
+  // WritableStreamAddWriteRequest
+  PromiseAdapter addWriteRequest(Context cx, Scriptable scope) {
+    var p = PromiseAdapter.uninitialized(cx, scope);
+    writeRequests.add(p);
+    return p;
+  }
+
+  void startErroring(Object error) {
+    throw new AssertionError("WritableStreamStartErroring");
+  }
+
+  void finishErroring() {
+    throw new AssertionError("WritableStreamFinishErroring");
+  }
+
+  private static final class PendingAbort {
+    PromiseAdapter promise;
+    Object reason;
+    boolean wasAlreadyErroring;
+
+    PendingAbort(PromiseAdapter promise, Object reason, boolean wasAlreadyErroring) {
+      this.promise = promise;
+      this.reason = reason;
+      this.wasAlreadyErroring = wasAlreadyErroring;
+    }
+  }
 }

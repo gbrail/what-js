@@ -114,18 +114,17 @@ public class PromiseAdapterTests {
     scope.put("ResolveFunc", scope, null);
     scope.put("p", scope, null);
     cx.evaluateString(
-            scope,
-            """
+        scope,
+        """
                 p = new Promise((resolve, reject) => { ResolveFunc = resolve; });
                 """,
-            "test.js",
-            1,
-            null);
+        "test.js",
+        1,
+        null);
     var p = scope.get("p", scope);
     var pa = PromiseAdapter.wrap(cx, scope, p);
     AtomicBoolean done = new AtomicBoolean();
-    pa.then(cx, scope,
-            (lcx, ls, val) -> done.set(true));
+    pa.then(cx, scope, (lcx, ls, val) -> done.set(true));
     cx.evaluateString(scope, "ResolveFunc('Done');", "test.js", 1, null);
     assertTrue(done.get());
   }
@@ -135,20 +134,18 @@ public class PromiseAdapterTests {
     scope.put("RejectFund", scope, null);
     scope.put("p", scope, null);
     cx.evaluateString(
-            scope,
-            """
+        scope,
+        """
                 p = new Promise((resolve, reject) => { RejectFunc = reject; });
                 """,
-            "test.js",
-            1,
-            null);
+        "test.js",
+        1,
+        null);
     var p = scope.get("p", scope);
     var pa = PromiseAdapter.wrap(cx, scope, p);
     AtomicBoolean resolved = new AtomicBoolean();
     AtomicBoolean rejected = new AtomicBoolean();
-    pa.then(cx, scope,
-            (lcx, ls, val) -> resolved.set(true),
-            (lcx, ls, val) -> rejected.set(true));
+    pa.then(cx, scope, (lcx, ls, val) -> resolved.set(true), (lcx, ls, val) -> rejected.set(true));
     cx.evaluateString(scope, "RejectFunc('Done');", "test.js", 1, null);
     assertTrue(rejected.get());
     assertFalse(resolved.get());
