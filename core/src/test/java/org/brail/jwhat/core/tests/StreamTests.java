@@ -3,6 +3,7 @@ package org.brail.jwhat.core.tests;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import org.brail.jwhat.events.Events;
 import org.brail.jwhat.framework.WPTTestLauncher;
 import org.brail.jwhat.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
@@ -19,7 +20,11 @@ public class StreamTests {
   public static void init() throws IOException {
     cx = Context.enter();
     launcher = WPTTestLauncher.newLauncher();
-    launcher.setSetupCallback(Stream::init);
+    launcher.setSetupCallback(
+        (cx, scope) -> {
+          Events.init(cx, scope);
+          Stream.init(cx, scope);
+        });
     launcher.addResource("subset-tests-by-key.js");
   }
 

@@ -46,6 +46,10 @@ public class AbortController extends ScriptableObject {
   }
 
   private static Object getSignal(Scriptable thisObj) {
-    return realThis(thisObj).signal;
+    return realThis(thisObj).getSignal();
+  }
+
+  public Object getSignal() {
+    return signal;
   }
 }

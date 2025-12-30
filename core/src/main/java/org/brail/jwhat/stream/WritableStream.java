@@ -1,6 +1,6 @@
 package org.brail.jwhat.stream;
 
-import java.util.ArrayList;
+import java.util.ArrayDeque;
 import org.brail.jwhat.core.impl.PromiseAdapter;
 import org.mozilla.javascript.Callable;
 import org.mozilla.javascript.Constructable;
@@ -29,7 +29,9 @@ public class WritableStream extends ScriptableObject {
   private PendingAbort pendingAbort;
   private Object error;
   private DefaultWriter writer = null;
-  private final ArrayList<PromiseAdapter> writeRequests = new ArrayList<>();
+  private final ArrayDeque<PromiseAdapter> writeRequests = new ArrayDeque<>();
+  Constructable controllerConstructor;
+  Constructable defaultWriterConstructor;
 
   public static void init(Context cx, Scriptable scope) {
     var writerConstructor = DefaultWriter.init(cx, scope);
@@ -40,7 +42,8 @@ public class WritableStream extends ScriptableObject {
             "WritableStream",
             2,
             LambdaConstructor.CONSTRUCTOR_DEFAULT,
-            (lcx, ls, args) -> constructor(lcx, ls, args, controllerConstructor));
+            (lcx, ls, args) ->
+                constructor(lcx, ls, args, writerConstructor, controllerConstructor));
     constructor.setPrototypePropertyAttributes(DONTENUM | READONLY | PERMANENT);
 
     constructor.definePrototypeMethod(scope, "abort", 0, WritableStream::abort);
@@ -66,15 +69,35 @@ public class WritableStream extends ScriptableObject {
   }
 
   private static Scriptable constructor(
-      Context cx, Scriptable scope, Object[] args, Constructable controllerCons) {
+      Context cx,
+      Scriptable scope,
+      Object[] args,
+      Constructable writerCons,
+      Constructable controllerCons) {
     Object sink = args.length > 0 ? args[0] : null;
     Object strategy = args.length > 1 ? args[1] : null;
     var ws = new WritableStream();
+    ws.initialize();
+    ws.defaultWriterConstructor = writerCons;
+    ws.controllerConstructor = controllerCons;
     ws.controller =
         (WritableController) controllerCons.construct(cx, scope, ScriptRuntime.emptyArgs);
-    ws.controller.setUp(
-        cx, scope, sink, ws, getSizeStrategy(scope, strategy), getHighWaterStrategy(strategy));
+    ws.controller.setUpFromSink(
+        cx, scope, ws, sink, getHighWaterStrategy(strategy), getSizeStrategy(scope, strategy));
     return ws;
+  }
+
+  // InitializeWritableStream
+  private void initialize() {
+    state = State.WRITABLE;
+    error = null;
+    writer = null;
+    controller = null;
+    inFlightWriteRequest = null;
+    inFlightCloseRequest = null;
+    closeRequest = null;
+    writeRequests.clear();
+    backpressure = false;
   }
 
   private static Object abort(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
@@ -103,7 +126,7 @@ public class WritableStream extends ScriptableObject {
     var promise = PromiseAdapter.uninitialized(cx, scope);
     pendingAbort = new PendingAbort(promise, reason, wasAlreadyErroring);
     if (!wasAlreadyErroring) {
-      startErroring(reason);
+      startErroring(cx, scope, reason);
     }
     return promise.getPromise();
   }
@@ -116,18 +139,31 @@ public class WritableStream extends ScriptableObject {
     return self.doClose(cx, scope);
   }
 
-  // WritableStreamClose
-  Object doClose(Context cx, Scriptable scope) {
-    if (state == State.CLOSED || state == State.ERRORED) {
-      return PromiseAdapter.resolved(cx, scope, Undefined.instance);
-    }
-    var promise = PromiseAdapter.uninitialized(cx, scope);
-    closeRequest = promise;
-    if (writer != null && backpressure && state == State.WRITABLE) {
-      writer.getReadyPromise().fulfill(cx, scope, Undefined.instance);
-    }
-    controller.doClose();
-    return promise.getPromise();
+  // AcquireWritableStreamDefaultWriter
+  Object acquireDefaultWriter(Context cx, Scriptable scope) {
+    var w = (DefaultWriter) defaultWriterConstructor.construct(cx, scope, ScriptRuntime.emptyArgs);
+    setUpDefaultWriter(w);
+    return w;
+  }
+
+  // CreateWritableStream
+  static Object createWritableStream(
+      Context cx,
+      Scriptable scope,
+      Callable startAlgo,
+      Callable writeAlgo,
+      Callable closeAlgo,
+      Callable abortAlgo,
+      double highWater,
+      Callable sizeAlgo) {
+    assert highWater >= 0.0;
+    var w = new WritableStream();
+    w.initialize();
+    w.controller =
+        (WritableController) w.controllerConstructor.construct(cx, scope, ScriptRuntime.emptyArgs);
+    w.controller.setUp(
+        cx, scope, w, startAlgo, writeAlgo, closeAlgo, abortAlgo, highWater, sizeAlgo);
+    return w;
   }
 
   private static Object getWriter(
@@ -142,6 +178,26 @@ public class WritableStream extends ScriptableObject {
     return writer;
   }
 
+  // WritableStreamClose
+  Object doClose(Context cx, Scriptable scope) {
+    if (state == State.CLOSED || state == State.ERRORED) {
+      return PromiseAdapter.resolved(cx, scope, Undefined.instance);
+    }
+    var promise = PromiseAdapter.uninitialized(cx, scope);
+    closeRequest = promise;
+    if (writer != null && backpressure && state == State.WRITABLE) {
+      writer.getReadyPromise().fulfill(cx, scope, Undefined.instance);
+    }
+    controller.doClose(cx, scope);
+    return promise.getPromise();
+  }
+
+  // SetUpWritableStreamDefaultWriter
+  void setUpDefaultWriter(DefaultWriter writer) {
+    throw new AssertionError("SetUpWritableStreamDefaultWriter");
+  }
+
+  // IsWritableStreamLocked
   private static Object isLocked(Scriptable thisObj) {
     return realThis(thisObj).isLocked();
   }
@@ -170,12 +226,17 @@ public class WritableStream extends ScriptableObject {
     return backpressure;
   }
 
-  void setBackpressure(boolean bp) {
+  void updateBackpressure(Context cx, Scriptable scope, boolean bp) {
+    assert state == State.WRITABLE;
+    assert !isCloseQueuedOrInFlight();
+    if (writer != null && bp != backpressure) {
+      if (backpressure) {
+        writer.ready = PromiseAdapter.uninitialized(cx, scope);
+      } else {
+        writer.ready.fulfill(cx, scope, Undefined.instance);
+      }
+    }
     this.backpressure = bp;
-  }
-
-  void updateBackpressure(boolean bp) {
-    throw new AssertionError("WritableStream&UpdateBackpressure");
   }
 
   Object getError() {
@@ -186,6 +247,16 @@ public class WritableStream extends ScriptableObject {
     return inFlightWriteRequest;
   }
 
+  // WritableStreamDealWithrejection
+  void dealWithRejection(Context cx, Scriptable scope, Object error) {
+    if (state == WritableStream.State.WRITABLE) {
+      startErroring(cx, scope, error);
+    } else {
+      assert state == State.ERRORING;
+      finishErroring(cx, scope);
+    }
+  }
+
   private static Callable getSizeStrategy(Scriptable scope, Object stratObj) {
     if (stratObj instanceof Scriptable strategy) {
       Object sizeObj = ScriptableObject.getProperty(strategy, "size");
@@ -193,7 +264,7 @@ public class WritableStream extends ScriptableObject {
         return sizeFunc;
       }
     }
-    return new LambdaFunction(scope, "getSize", 0, (cx1, scope1, thisObj, args) -> 1);
+    return new LambdaFunction(scope, "getSize", 0, (cx1, scope1, thisObj, args) -> 1.0);
   }
 
   private static double getHighWaterStrategy(Object stratObj) {
@@ -210,17 +281,140 @@ public class WritableStream extends ScriptableObject {
 
   // WritableStreamAddWriteRequest
   PromiseAdapter addWriteRequest(Context cx, Scriptable scope) {
+    assert isLocked();
+    assert state == State.WRITABLE;
     var p = PromiseAdapter.uninitialized(cx, scope);
     writeRequests.add(p);
     return p;
   }
 
-  void startErroring(Object error) {
-    throw new AssertionError("WritableStreamStartErroring");
+  // WritableStreamStartErroring
+  void startErroring(Context cx, Scriptable scope, Object err) {
+    assert this.error == null;
+    assert state == State.WRITABLE;
+    assert controller != null;
+    state = State.ERRORING;
+    this.error = err;
+    if (writer != null) {
+      writer.ensureReadyRejected(cx, scope, err);
+    }
+    if (!hasOperationInFlight() || controller.started) {
+      finishErroring(cx, scope);
+    }
   }
 
-  void finishErroring() {
-    throw new AssertionError("WritableStreamFinishErroring");
+  // WritableStreamFinishErroring
+  void finishErroring(Context cx, Scriptable scope) {
+    assert state == State.ERRORING;
+    assert !hasOperationInFlight();
+    state = State.ERRORED;
+    controller.runErrorSteps();
+    PromiseAdapter req;
+    while ((req = writeRequests.poll()) != null) {
+      req.reject(cx, scope, error);
+    }
+    if (pendingAbort == null) {
+      rejectCloseAsNeeded(cx, scope);
+      return;
+    }
+    var abortReq = pendingAbort;
+    pendingAbort = null;
+    if (abortReq.wasAlreadyErroring) {
+      abortReq.promise.reject(cx, scope, error);
+      rejectCloseAsNeeded(cx, scope);
+      return;
+    }
+    var ap = controller.runAbortSteps(cx, scope, abortReq.reason);
+    ap.then(
+        cx,
+        scope,
+        (lcx, ls, v) -> {
+          abortReq.promise.fulfill(cx, scope, Undefined.instance);
+          rejectCloseAsNeeded(cx, scope);
+        },
+        (lcx, ls, v) -> {
+          abortReq.promise.reject(cx, scope, v);
+          rejectCloseAsNeeded(cx, scope);
+        });
+  }
+
+  // WritableStreamRejectCloseAndClosedPromiseAsNeeded
+  private void rejectCloseAsNeeded(Context cx, Scriptable scope) {
+    assert state == State.ERRORED;
+    if (closeRequest != null) {
+      assert inFlightCloseRequest == null;
+      closeRequest.reject(cx, scope, error);
+      closeRequest = null;
+    }
+    if (writer != null) {
+      writer.closed.reject(cx, scope, error);
+    }
+  }
+
+  // WritableStreamHasOperationMarkedInFlight
+  private boolean hasOperationInFlight() {
+    return inFlightWriteRequest != null || inFlightCloseRequest != null;
+  }
+
+  void markCloseRequestInFlight() {
+    assert inFlightCloseRequest == null;
+    assert closeRequest != null;
+    inFlightCloseRequest = closeRequest;
+    closeRequest = null;
+  }
+
+  void markFirstWriteRequestInFlight() {
+    assert inFlightWriteRequest == null;
+    assert !writeRequests.isEmpty();
+    inFlightWriteRequest = writeRequests.removeFirst();
+  }
+
+  // WritableStreamFinishInFlightWrite
+  void finishInFlightWrite(Context cx, Scriptable scope) {
+    assert inFlightWriteRequest != null;
+    inFlightWriteRequest.fulfill(cx, scope, Undefined.instance);
+    inFlightWriteRequest = null;
+  }
+
+  // WritableStreamFinishInFlightWriteWithError
+  void finishInFlightWriteWithError(Context cx, Scriptable scope, Object err) {
+    assert inFlightWriteRequest != null;
+    inFlightWriteRequest.reject(cx, scope, err);
+    inFlightWriteRequest = null;
+    assert state == State.ERRORING || state == State.WRITABLE;
+    dealWithRejection(cx, scope, err);
+  }
+
+  // WritableStreamFinishInFlightClose
+  void finishInFlightClose(Context cx, Scriptable scope) {
+    assert inFlightCloseRequest != null;
+    inFlightCloseRequest.fulfill(cx, scope, Undefined.instance);
+    inFlightCloseRequest = null;
+    assert state == State.ERRORING || state == State.WRITABLE;
+    if (state == State.ERRORING) {
+      error = null;
+      if (pendingAbort != null) {
+        pendingAbort.promise.fulfill(cx, scope, Undefined.instance);
+        pendingAbort = null;
+      }
+    }
+    state = State.CLOSED;
+    if (writer != null) {
+      writer.closed.fulfill(cx, scope, Undefined.instance);
+    }
+  }
+
+  // WritableStreamFinishInFlightCloseWithError
+  void finishInFlightCloseWithError(Context cx, Scriptable scope, Object err) {
+    assert inFlightCloseRequest != null;
+    inFlightCloseRequest.reject(cx, scope, err);
+    inFlightCloseRequest = null;
+    assert state == State.ERRORING || state == State.WRITABLE;
+    if (pendingAbort != null) {
+      pendingAbort.promise.reject(cx, scope, err);
+      pendingAbort = null;
+    }
+    dealWithRejection(cx, scope, err);
   }
 
   private static final class PendingAbort {

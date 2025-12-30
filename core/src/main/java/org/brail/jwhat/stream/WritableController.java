@@ -14,18 +14,15 @@ import org.mozilla.javascript.Undefined;
 
 class WritableController extends ScriptableObject {
   private WritableStream stream;
-  private Object abortAlgorithm;
-  private Object closeAlgorithm;
-  private Callable startCb;
-  private Object writeAlgorithm;
-  private Callable getSizeCb;
+  private Callable abortAlgorithm;
+  private Callable closeAlgorithm;
+  private Callable writeAlgorithm;
+  private Callable strategySizeAlgorithm;
   private Scriptable sink;
-  // TODO controller class
   private AbortController abortController;
   private final QueueWithSize<Object> writeQueue = new QueueWithSize<>();
-  private long queueSize;
   private double strategyHwm;
-  private boolean started;
+  boolean started;
 
   private static final Object CLOSE_SENTINEL = new Object();
 
@@ -61,85 +58,145 @@ class WritableController extends ScriptableObject {
     return new WritableController();
   }
 
+  // [ErrorSteps()]
+  void runErrorSteps() {
+    writeQueue.reset();
+  }
+
+  // [AbortSteps()]
+  PromiseAdapter runAbortSteps(Context cx, Scriptable scope, Object reason) {
+    var result = abortAlgorithm.call(cx, scope, sink, new Object[] {reason});
+    clearAlgorithms();
+    return PromiseAdapter.wrap(cx, scope, result);
+  }
+
   private static Object error(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+    var self = realThis(thisObj);
+    if (self.stream.getStreamState() == WritableStream.State.WRITABLE) {
+      Object err = args.length > 0 ? args[0] : Undefined.instance;
+      self.doError(cx, scope, err);
+    }
     return Undefined.instance;
   }
 
   private static Object getSignal(Scriptable thisObj) {
+    var self = realThis(thisObj);
+    if (self.abortController != null) {
+      return self.abortController.getSignal();
+    }
     return Undefined.instance;
   }
 
+  // SetUpWritableStreamDefaultController
   void setUp(
       Context cx,
       Scriptable scope,
-      Object sinkObj,
       WritableStream stream,
-      Callable sizeCb,
-      double hwm) {
+      Callable startAlgo,
+      Callable writeAlgo,
+      Callable closeAlgo,
+      Callable abortAlgo,
+      double highWater,
+      Callable sizeAlgo) {
     this.stream = stream;
+    this.writeQueue.reset();
+    this.started = false;
     this.abortController = (AbortController) cx.newObject(scope, "AbortController");
-    this.getSizeCb = sizeCb;
-    this.strategyHwm = hwm;
-    // Works because queue should be empty now...
-    stream.setBackpressure(hwm <= 0.0);
-    setUpSink(cx, scope, sinkObj);
-    var sa = PromiseAdapter.wrap(cx, scope, startCb.call(cx, scope, sink, new Object[] {this}));
+    this.strategySizeAlgorithm = sizeAlgo;
+    this.strategyHwm = highWater;
+    this.writeAlgorithm = writeAlgo;
+    this.closeAlgorithm = closeAlgo;
+    this.abortAlgorithm = abortAlgo;
+    stream.updateBackpressure(cx, scope, getBackpressure());
+    var sa = PromiseAdapter.wrap(cx, scope, startAlgo.call(cx, scope, sink, new Object[] {this}));
     sa.then(
         cx,
         scope,
         (lcx, ls, val) -> {
           started = true;
-          advanceQueueIfNeeded();
+          advanceQueueIfNeeded(cx, scope);
         },
         (lcx, ls, val) -> {
           started = true;
-          dealWithRejection(val);
+          stream.dealWithRejection(cx, scope, val);
         });
   }
 
-  private void setUpSink(Context cx, Scriptable scope, Object sinkObj) {
+  // SetUpWritableStreamDefaultControllerFromUnderlyingSink
+  void setUpFromSink(
+      Context cx,
+      Scriptable scope,
+      WritableStream stream,
+      Object sinkObj,
+      double highWater,
+      Callable sizeStrategy) {
     var returnUndefined =
-        new LambdaFunction(scope, "default", 0, (lcx, ls, to, args) -> Undefined.instance);
-    this.startCb = returnUndefined;
-    if (sinkObj == null) {
-      return;
+        new LambdaFunction(
+            scope,
+            "default",
+            0,
+            (lcx, ls, to, args) -> PromiseAdapter.resolved(cx, scope, Undefined.instance));
+    Callable startAlgorithm = returnUndefined;
+    Callable writeAlgorithm = returnUndefined;
+    Callable closeAlgorithm = returnUndefined;
+    Callable abortAlgorithm = returnUndefined;
+    if (sinkObj != null) {
+      if (!(sinkObj instanceof Scriptable s)) {
+        throw ScriptRuntime.typeError("Invalid sink type");
+      }
+      this.sink = s;
+      if (s.has("type", s)) {
+        throw ScriptRuntime.rangeError("Invalid sink");
+      }
+      if (ScriptableObject.getProperty(s, "start") instanceof Callable start) {
+        startAlgorithm = start;
+      }
+      if (ScriptableObject.getProperty(s, "write") instanceof Callable write) {
+        writeAlgorithm = write;
+      }
+      if (ScriptableObject.getProperty(s, "close") instanceof Callable close) {
+        closeAlgorithm = close;
+      }
+      if (ScriptableObject.getProperty(s, "abort") instanceof Callable abort) {
+        abortAlgorithm = abort;
+      }
     }
-    if (!(sinkObj instanceof Scriptable s)) {
-      throw ScriptRuntime.typeError("Invalid sink type");
-    }
-    this.sink = s;
-    if (s.has("type", s)) {
-      throw ScriptRuntime.rangeError("Invalid sink");
-    }
-    if (ScriptableObject.getProperty(s, "start") instanceof Callable start) {
-      this.startCb = start;
-    }
-    // TODO other three CBs
+    setUp(
+        cx,
+        scope,
+        stream,
+        startAlgorithm,
+        writeAlgorithm,
+        closeAlgorithm,
+        abortAlgorithm,
+        highWater,
+        sizeStrategy);
   }
 
-  private void advanceQueueIfNeeded() {
+  // WritableStreamDefaultControllerClearAlgorithms
+  void clearAlgorithms() {
+    writeAlgorithm = null;
+    closeAlgorithm = null;
+    abortAlgorithm = null;
+    strategySizeAlgorithm = null;
+  }
+
+  private void advanceQueueIfNeeded(Context cx, Scriptable scope) {
     if (started || stream.getInFlightWriteRequest() != null) {
       return;
     }
     if (stream.getStreamState() == WritableStream.State.ERRORING) {
-      stream.finishErroring();
+      stream.finishErroring(cx, scope);
       return;
     }
     if (writeQueue.isEmpty()) {
       return;
     }
-    if (writeQueue.peek() == CLOSE_SENTINEL) {
-      processClose();
+    var val = writeQueue.peek();
+    if (val == CLOSE_SENTINEL) {
+      processClose(cx, scope);
     } else {
-      processWrite();
-    }
-  }
-
-  private void dealWithRejection(Object error) {
-    if (stream.getStreamState() == WritableStream.State.WRITABLE) {
-      stream.startErroring(error);
-    } else {
-      stream.finishErroring();
+      processWrite(cx, scope, val);
     }
   }
 
@@ -148,42 +205,96 @@ class WritableController extends ScriptableObject {
     try {
       writeQueue.enqueue(cx, scope, chunk, chunkSize);
     } catch (RhinoException re) {
-      errorIfNeeded(re);
+      errorIfNeeded(cx, scope, re);
       return;
     }
     if (!stream.isCloseQueuedOrInFlight()
         && stream.getStreamState() == WritableStream.State.WRITABLE) {
-      stream.updateBackpressure(getBackpressure());
+      stream.updateBackpressure(cx, scope, getBackpressure());
     }
-    advanceQueueIfNeeded();
+    advanceQueueIfNeeded(cx, scope);
   }
 
   // WritableStreamDefaultControllerGetChunkSize
-  double getChunkSize() {
-    throw new AssertionError("WritableStreamDefaultControllerGetChunkSize");
+  double getChunkSize(Context cx, Scriptable scope, Object chunk) {
+    if (strategySizeAlgorithm == null) {
+      return 1.0;
+    }
+    try {
+      var s = strategySizeAlgorithm.call(cx, scope, sink, new Object[] {chunk});
+      return ScriptRuntime.toNumber(s);
+    } catch (RhinoException re) {
+      errorIfNeeded(cx, scope, re);
+      return 1.0;
+    }
   }
 
-  Object getDesiredSize() {
-    throw new AssertionError("WritableStreamDefaultControllerGetDesiredSize");
+  double getDesiredSize() {
+    return strategyHwm - writeQueue.getTotalSize();
   }
 
+  // WritableStreamDefaultControllerGetBackpressure
   boolean getBackpressure() {
-    throw new AssertionError("WritableStreamDefaultControllerGetBackpressure");
+    return getDesiredSize() <= 0.0;
   }
 
-  void doClose() {
-    throw new AssertionError("WritableStreamDefaultControllerClose");
+  // WritableStreamDefaultControllerClose
+  void doClose(Context cx, Scriptable scope) {
+    writeQueue.enqueue(cx, scope, CLOSE_SENTINEL, 0.0);
+    advanceQueueIfNeeded(cx, scope);
   }
 
-  private void processClose() {
-    throw new AssertionError("WritableStreamDefaultControllerProcessClose");
+  // WritableStreamDefaultControllerError
+  void doError(Context cx, Scriptable scope, Object err) {
+    clearAlgorithms();
+    stream.startErroring(cx, scope, err);
   }
 
-  private void processWrite() {
-    throw new AssertionError("WritableStreamDefaultControllerProcessWrite");
+  // WritableStreamDefaultControllerProcessClose
+  private void processClose(Context cx, Scriptable scope) {
+    stream.markCloseRequestInFlight();
+    writeQueue.dequeue();
+    assert writeQueue.isEmpty();
+    var cp =
+        PromiseAdapter.wrap(
+            cx, scope, closeAlgorithm.call(cx, scope, sink, ScriptRuntime.emptyArgs));
+    clearAlgorithms();
+    cp.then(
+        cx,
+        scope,
+        (lcx, ls, v) -> stream.finishInFlightClose(cx, scope),
+        (lcx, ls, v) -> stream.finishInFlightCloseWithError(cx, scope, v));
   }
 
-  private void errorIfNeeded(Object err) {
-    throw new AssertionError("WritableStreamDefaultControllerErrorIfNeeded");
+  // WritableStreamDefaultControllerProcessWrite
+  private void processWrite(Context cx, Scriptable scope, Object chunk) {
+    stream.markFirstWriteRequestInFlight();
+    var wp =
+        PromiseAdapter.wrap(cx, scope, writeAlgorithm.call(cx, scope, sink, new Object[] {chunk}));
+    wp.then(
+        cx,
+        scope,
+        (lcx, ls, v) -> {
+          stream.finishInFlightWrite(cx, scope);
+          writeQueue.dequeue();
+          if (!stream.isCloseQueuedOrInFlight()
+              && stream.getStreamState() == WritableStream.State.WRITABLE) {
+            stream.updateBackpressure(cx, scope, getBackpressure());
+          }
+          advanceQueueIfNeeded(cx, scope);
+        },
+        (lcx, ls, v) -> {
+          if (stream.getStreamState() == WritableStream.State.WRITABLE) {
+            clearAlgorithms();
+          }
+          stream.finishInFlightWriteWithError(cx, scope, v);
+        });
+  }
+
+  // WritableStreamDefaultControllerErrorIfNeeded
+  private void errorIfNeeded(Context cx, Scriptable scope, Object err) {
+    if (stream.getStreamState() == WritableStream.State.WRITABLE) {
+      doError(cx, scope, err);
+    }
   }
 }
