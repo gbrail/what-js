@@ -15,7 +15,7 @@ dependencies {
     testImplementation platform('org.junit:junit-bom:5.14.1')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-    errorprone 'com.google.errorprone:error_prone_core:2.28.0'
+    errorprone 'com.google.errorprone:error_prone_core:2.45.0'
 }
 
 tasks.withType(JavaCompile).configureEach {
@@ -29,7 +29,7 @@ test {
 
 spotless {
     java {
-        googleJavaFormat('1.23.0')
+        googleJavaFormat('1.33.0')
     }
 }
 
