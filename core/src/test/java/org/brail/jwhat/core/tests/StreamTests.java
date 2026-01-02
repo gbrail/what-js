@@ -26,6 +26,8 @@ public class StreamTests {
           Stream.init(cx, scope);
         });
     launcher.addResource("subset-tests-by-key.js");
+    launcher.addScript("streams/resources/test-utils.js");
+    launcher.addScript("streams/resources/recording-streams.js");
   }
 
   @AfterAll

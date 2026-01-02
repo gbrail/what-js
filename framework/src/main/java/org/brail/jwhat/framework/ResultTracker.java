@@ -1,5 +1,7 @@
 package org.brail.jwhat.framework;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -13,7 +15,7 @@ import org.mozilla.javascript.Undefined;
 public class ResultTracker {
   private final ArrayList<Result> results = new ArrayList<>();
   private String finalMessage;
-  private Optional<FinalStatus> finalStatus = Optional.empty();
+  private FinalStatus finalStatus = FinalStatus.NONE;
 
   /**
    * Return a function that can be passed to add_result_callback in the test harness. The function
@@ -45,7 +47,7 @@ public class ResultTracker {
         (Context cx, Scriptable ls, Scriptable thisObj, Object[] args) -> {
           assert args.length >= 2;
           Scriptable ts = (Scriptable) args[1];
-          finalStatus = Optional.of(toFinalStatus(getInt(ts, "status")));
+          finalStatus = toFinalStatus(getInt(ts, "status"));
           finalMessage = getString(ts, "message");
           return Undefined.instance;
         });
@@ -55,7 +57,7 @@ public class ResultTracker {
     return results;
   }
 
-  public Optional<FinalStatus> getFinalStatus() {
+  public FinalStatus getFinalStatus() {
     return finalStatus;
   }
 
@@ -63,14 +65,23 @@ public class ResultTracker {
     return finalMessage;
   }
 
+  public void trackException(Throwable t) {
+    finalStatus = FinalStatus.EXCEPTION;
+    var sw = new StringWriter();
+    var pw = new PrintWriter(sw);
+    t.printStackTrace(pw);
+    finalMessage = t.toString() + sw.toString();
+  }
+
   /** Generate a description of the test results. This may be used in a JUnit assertion. */
   public Supplier<String> getFailureReason() {
     return () -> {
-      if (finalStatus.isPresent() && finalStatus.get() != FinalStatus.OK) {
-        return "Test harness failed: " + finalStatus.get() + ": " + finalMessage;
-      }
-
       var b = new StringBuilder();
+      b.append("finalStatus = ");
+      b.append(finalStatus);
+      b.append(": ");
+      b.append(finalMessage);
+      b.append('\n');
       for (var r : results) {
         b.append(r).append('\n');
       }
@@ -80,7 +91,7 @@ public class ResultTracker {
 
   /** Return true only if harness ran successfully and all tests passed. */
   public boolean success() {
-    if (finalStatus.isEmpty() || finalStatus.get() != FinalStatus.OK) {
+    if (finalStatus != FinalStatus.OK) {
       return false;
     }
     return results.stream().allMatch(r -> r.status == Status.PASS);
@@ -121,10 +132,12 @@ public class ResultTracker {
   }
 
   public enum FinalStatus {
+    NONE,
     OK,
     ERROR,
     TIMEOUT,
     PRECONDITION_FAILED,
+    EXCEPTION,
   }
 
   public enum Status {

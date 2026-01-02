@@ -17,7 +17,6 @@ import org.mozilla.javascript.Undefined;
 
 public class WPTTestLauncher {
   private static final String TEST_BASE = "../testcases";
-  private static final String RESOURCE_BASE = "../wpt";
 
   private final StringBuilder testHarness;
   private BiConsumer<Context, Scriptable> setupCallback;
@@ -102,7 +101,11 @@ public class WPTTestLauncher {
       throw new AssertionError("too short: " + pp);
     }
     setBase.call(cx, scope, null, new Object[] {testPath.getParent().toString()});
-    cx.evaluateString(scope, testHarness + script, testPath.getFileName().toString(), 1, null);
+    try {
+      cx.evaluateString(scope, testHarness + script, testPath.getFileName().toString(), 1, null);
+    } catch (Throwable t) {
+      tracker.trackException(t);
+    }
     return tracker;
   }
 

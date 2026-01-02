@@ -1,6 +1,7 @@
 package org.brail.jwhat.stream;
 
 import org.brail.jwhat.core.impl.PromiseAdapter;
+import org.brail.jwhat.core.impl.PromiseWrapper;
 import org.brail.jwhat.events.AbortController;
 import org.mozilla.javascript.Callable;
 import org.mozilla.javascript.Context;
@@ -55,6 +56,9 @@ class WritableController extends ScriptableObject {
   }
 
   private static Scriptable constructor(Context cx, Scriptable scope, Object[] args) {
+    if (args.length != 0) {
+      throw ScriptRuntime.typeError("not constructable");
+    }
     return new WritableController();
   }
 
@@ -64,10 +68,10 @@ class WritableController extends ScriptableObject {
   }
 
   // [AbortSteps()]
-  PromiseAdapter runAbortSteps(Context cx, Scriptable scope, Object reason) {
+  PromiseWrapper runAbortSteps(Context cx, Scriptable scope, Object reason) {
     var result = abortAlgorithm.call(cx, scope, sink, new Object[] {reason});
     clearAlgorithms();
-    return PromiseAdapter.wrap(cx, scope, result);
+    return PromiseWrapper.wrap(cx, scope, result);
   }
 
   private static Object error(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
@@ -108,7 +112,7 @@ class WritableController extends ScriptableObject {
     this.closeAlgorithm = closeAlgo;
     this.abortAlgorithm = abortAlgo;
     stream.updateBackpressure(cx, scope, getBackpressure());
-    var sa = PromiseAdapter.wrap(cx, scope, startAlgo.call(cx, scope, sink, new Object[] {this}));
+    var sa = PromiseWrapper.wrap(cx, scope, startAlgo.call(cx, scope, sink, new Object[] {this}));
     sa.then(
         cx,
         scope,
@@ -256,7 +260,7 @@ class WritableController extends ScriptableObject {
     writeQueue.dequeue();
     assert writeQueue.isEmpty();
     var cp =
-        PromiseAdapter.wrap(
+        PromiseWrapper.wrap(
             cx, scope, closeAlgorithm.call(cx, scope, sink, ScriptRuntime.emptyArgs));
     clearAlgorithms();
     cp.then(
@@ -270,7 +274,7 @@ class WritableController extends ScriptableObject {
   private void processWrite(Context cx, Scriptable scope, Object chunk) {
     stream.markFirstWriteRequestInFlight();
     var wp =
-        PromiseAdapter.wrap(cx, scope, writeAlgorithm.call(cx, scope, sink, new Object[] {chunk}));
+        PromiseWrapper.wrap(cx, scope, writeAlgorithm.call(cx, scope, sink, new Object[] {chunk, this}));
     wp.then(
         cx,
         scope,

@@ -28,7 +28,7 @@ public class WritableStream extends ScriptableObject {
   private PromiseAdapter inFlightWriteRequest;
   private PendingAbort pendingAbort;
   private Object error;
-  private DefaultWriter writer = null;
+  DefaultWriter writer = null;
   private final ArrayDeque<PromiseAdapter> writeRequests = new ArrayDeque<>();
   Constructable controllerConstructor;
   Constructable defaultWriterConstructor;
@@ -169,13 +169,7 @@ public class WritableStream extends ScriptableObject {
   private static Object getWriter(
       Context cx, Scriptable scope, Scriptable thisObj, Constructable writerConstructor) {
     WritableStream self = realThis(thisObj);
-    if (self.writer != null) {
-      throw ScriptRuntime.typeError("Stream is locked");
-    }
-    var writer = (DefaultWriter) writerConstructor.construct(cx, scope, ScriptRuntime.emptyArgs);
-    writer.setUp(cx, scope, self);
-    self.writer = writer;
-    return writer;
+    return writerConstructor.construct(cx, scope, new Object[] {self});
   }
 
   // WritableStreamClose
@@ -186,7 +180,7 @@ public class WritableStream extends ScriptableObject {
     var promise = PromiseAdapter.uninitialized(cx, scope);
     closeRequest = promise;
     if (writer != null && backpressure && state == State.WRITABLE) {
-      writer.getReadyPromise().fulfill(cx, scope, Undefined.instance);
+      writer.ready.fulfill(cx, scope, Undefined.instance);
     }
     controller.doClose(cx, scope);
     return promise.getPromise();

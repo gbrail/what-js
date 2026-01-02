@@ -9,75 +9,17 @@ import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
 import org.mozilla.javascript.Undefined;
 
+/** PromiseAdapter creates a Promise in Rhino and allows us to resolve or reject it when we need. */
 public class PromiseAdapter {
   private final NativePromise promise;
   private final Callable resolve;
   private final Callable reject;
   private boolean pending;
 
-  public interface ResultCallback {
-    void deliver(Context cx, Scriptable scope, Object result);
-  }
-
   private PromiseAdapter(NativePromise p, Callable resolve, Callable reject) {
     this.promise = p;
     this.resolve = resolve;
     this.reject = reject;
-  }
-
-  /** Register a callback that will be called when the promise resolves. */
-  public void then(Context cx, Scriptable scope, ResultCallback cb) {
-    var resolve =
-        new LambdaFunction(
-            scope,
-            "resolve",
-            1,
-            (lcx, ls, to, args) -> {
-              var val = args.length > 0 ? args[0] : Undefined.instance;
-              cb.deliver(lcx, ls, val);
-              return Undefined.instance;
-            });
-    var then = (Callable) ScriptableObject.getProperty(promise, "then");
-    then.call(cx, scope, promise, new Object[] {resolve});
-  }
-
-  /** Register a callback that will be called when the promise resolves. */
-  public void then(
-      Context cx, Scriptable scope, ResultCallback resolveCb, ResultCallback rejectCb) {
-    var resolve =
-        new LambdaFunction(
-            scope,
-            "resolve",
-            1,
-            (lcx, ls, to, args) -> {
-              var val = args.length > 0 ? args[0] : Undefined.instance;
-              resolveCb.deliver(lcx, ls, val);
-              return Undefined.instance;
-            });
-    var reject =
-        new LambdaFunction(
-            scope,
-            "reject",
-            1,
-            (lcx, ls, to, args) -> {
-              var val = args.length > 0 ? args[0] : Undefined.instance;
-              rejectCb.deliver(lcx, ls, val);
-              return Undefined.instance;
-            });
-    var then = (Callable) ScriptableObject.getProperty(promise, "then");
-    then.call(cx, scope, promise, new Object[] {resolve, reject});
-  }
-
-  /**
-   * Wrap a Promise or an ordinary object. If a promise, then the adapter may be used with that
-   * promise. If a regular value, then the adapter will be backed by a promise that is already
-   * resolved.
-   */
-  public static PromiseAdapter wrap(Context cx, Scriptable scope, Object val) {
-    if (val instanceof NativePromise pv) {
-      return new PromiseAdapter(pv, null, null);
-    }
-    return resolved(cx, scope, val);
   }
 
   /** Create a new, uninitialized promise. */
@@ -102,12 +44,15 @@ public class PromiseAdapter {
     return a;
   }
 
-  /** Create a promise that is already resolved. */
-  public static PromiseAdapter resolved(Context cx, Scriptable scope, Object value) {
+  static NativePromise newResolvedPromise(Context cx, Scriptable scope, Object value) {
     Scriptable promise = (Scriptable) ScriptableObject.getProperty(scope, "Promise");
     Callable resolve = (Callable) ScriptableObject.getProperty(promise, "resolve");
-    NativePromise p = (NativePromise) resolve.call(cx, scope, promise, new Object[] {value});
-    return new PromiseAdapter(p, null, null);
+    return (NativePromise) resolve.call(cx, scope, promise, new Object[] {value});
+  }
+
+  /** Create a promise that is already resolved. */
+  public static PromiseAdapter resolved(Context cx, Scriptable scope, Object value) {
+    return new PromiseAdapter(newResolvedPromise(cx, scope, value), null, null);
   }
 
   /** Create a promise that is already rejected. */
@@ -137,9 +82,10 @@ public class PromiseAdapter {
    * "rejected" was used.
    */
   public void fulfill(Context cx, Scriptable scope, Object value) {
-    assert resolve != null;
-    pending = false;
-    resolve.call(cx, scope, promise, new Object[] {value});
+    if (pending) {
+      pending = false;
+      resolve.call(cx, scope, promise, new Object[] {value});
+    }
   }
 
   /**
@@ -147,8 +93,9 @@ public class PromiseAdapter {
    * "rejected" was used.
    */
   public void reject(Context cx, Scriptable scope, Object error) {
-    assert reject != null;
-    pending = false;
-    reject.call(cx, scope, promise, new Object[] {error});
+    if (pending) {
+      pending = false;
+      reject.call(cx, scope, promise, new Object[] {error});
+    }
   }
 }

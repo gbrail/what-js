@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.brail.jwhat.console.Console;
 import org.brail.jwhat.core.impl.PromiseAdapter;
+import org.brail.jwhat.core.impl.PromiseWrapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -122,7 +123,7 @@ public class PromiseAdapterTests {
         1,
         null);
     var p = scope.get("p", scope);
-    var pa = PromiseAdapter.wrap(cx, scope, p);
+    var pa = PromiseWrapper.wrap(cx, scope, p);
     AtomicBoolean done = new AtomicBoolean();
     pa.then(cx, scope, (lcx, ls, val) -> done.set(true));
     cx.evaluateString(scope, "ResolveFunc('Done');", "test.js", 1, null);
@@ -142,7 +143,7 @@ public class PromiseAdapterTests {
         1,
         null);
     var p = scope.get("p", scope);
-    var pa = PromiseAdapter.wrap(cx, scope, p);
+    var pa = PromiseWrapper.wrap(cx, scope, p);
     AtomicBoolean resolved = new AtomicBoolean();
     AtomicBoolean rejected = new AtomicBoolean();
     pa.then(cx, scope, (lcx, ls, val) -> resolved.set(true), (lcx, ls, val) -> rejected.set(true));

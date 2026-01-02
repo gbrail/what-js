@@ -73,12 +73,17 @@ class DefaultWriter extends ScriptableObject {
     }
   }
 
-  PromiseAdapter getReadyPromise() {
-    return ready;
-  }
-
   private static Scriptable constructor(Context cx, Scriptable scope, Object[] args) {
-    return new DefaultWriter();
+    if (args.length < 1 || !(args[0] instanceof WritableStream stream)) {
+      throw ScriptRuntime.typeError("Stream required");
+    }
+    if (stream.writer != null) {
+      throw ScriptRuntime.typeError("Stream is locked");
+    }
+    var w = new DefaultWriter();
+    w.setUp(cx, scope, stream);
+    stream.writer = w;
+    return w;
   }
 
   private static Object abort(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
