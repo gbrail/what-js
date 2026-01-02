@@ -274,7 +274,8 @@ class WritableController extends ScriptableObject {
   private void processWrite(Context cx, Scriptable scope, Object chunk) {
     stream.markFirstWriteRequestInFlight();
     var wp =
-        PromiseWrapper.wrap(cx, scope, writeAlgorithm.call(cx, scope, sink, new Object[] {chunk, this}));
+        PromiseWrapper.wrap(
+            cx, scope, writeAlgorithm.call(cx, scope, sink, new Object[] {chunk, this}));
     wp.then(
         cx,
         scope,
