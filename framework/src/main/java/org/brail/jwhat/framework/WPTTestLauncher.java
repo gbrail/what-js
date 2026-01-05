@@ -16,7 +16,7 @@ import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.Undefined;
 
 public class WPTTestLauncher {
-  private static final String TEST_BASE = "../testcases";
+  static final String TEST_BASE = "../testcases";
 
   private final StringBuilder testHarness;
   private BiConsumer<Context, Scriptable> setupCallback;
@@ -43,11 +43,6 @@ public class WPTTestLauncher {
     this.setupCallback = callback;
   }
 
-  public void addScript(String path) throws IOException {
-    Path p = Path.of(TEST_BASE, path);
-    testHarness.append(Files.readString(p));
-  }
-
   public void addResource(String path) throws IOException {
     testHarness.append(Utils.readResource("org/brail/jwhat/framework/" + path));
   }
@@ -59,8 +54,12 @@ public class WPTTestLauncher {
   private Scriptable initializeScope(Context cx, ResultTracker tracker) throws IOException {
     Scriptable scope = cx.initStandardObjects();
     MinimalFetch.init(cx, scope);
+    // Parts of the test framework use "self" to find the global scope
     scope.put("self", scope, scope);
+    // Some tests use the console
     scope.put("console", scope, MinimalConsole.init(cx, scope));
+    // Tools used by the test framework to hook into our stuff
+    TestUtils.init(cx, scope);
     scope.put("__testResultTracker", scope, tracker.getResultCallback(scope));
     scope.put("__testCompletionTracker", scope, tracker.getCompletionCallback(scope));
     scope.put("__testDefer", scope, new LambdaFunction(scope, "defer", 1, WPTTestLauncher::defer));
@@ -100,6 +99,7 @@ public class WPTTestLauncher {
     if (pp.getNameCount() <= 2) {
       throw new AssertionError("too short: " + pp);
     }
+    HelperLoader.loadHelpers(cx, scope, script, testPath.getParent());
     setBase.call(cx, scope, null, new Object[] {testPath.getParent().toString()});
     try {
       cx.evaluateString(scope, testHarness + script, testPath.getFileName().toString(), 1, null);
