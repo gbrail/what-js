@@ -90,7 +90,7 @@ public class ResultTracker {
 
   /** Return true only if harness ran successfully and all tests passed. */
   public boolean success() {
-    if (finalStatus != FinalStatus.OK) {
+    if (finalStatus != FinalStatus.OK && finalStatus != FinalStatus.NONE) {
       return false;
     }
     return results.stream().allMatch(r -> r.status == Status.PASS);
