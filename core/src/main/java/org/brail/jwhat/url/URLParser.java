@@ -86,71 +86,32 @@ public class URLParser {
       }
 
       switch (state) {
-        case SCHEME_START:
-          state = schemeStartState(c);
-          break;
-        case SCHEME:
-          state = schemeState(c);
-          break;
-        case NO_SCHEME:
-          state = noSchemeState(c);
-          break;
-        case SPECIAL_REL_OR_AUTHORITY:
-          state = specialRelativeOrAuthorityState(c);
-          break;
-        case PATH_OR_AUTHORITY:
-          state = pathOrAuthorityState(c);
-          break;
-        case RELATIVE:
-          state = relativeState(c);
-          break;
-        case RELATIVE_SLASH:
-          state = relativeSlashState(c);
-          break;
-        case SPECIAL_AUTHORITY_SLASHES:
-          state = specialAuthoritySlashesState(c);
-          break;
-        case SPECIAL_AUTHORITY_IGNORE_SLASHES:
-          state = specialAuthorityIgnoreSlashesState(c);
-          break;
-        case AUTHORITY:
-          state = authorityState(c);
-          break;
-        case HOST:
-        case HOSTNAME:
-          state = hostState(c, state);
-          break;
-        case PORT:
-          state = portState(c);
-          break;
-        case FILE:
-          state = fileState(c);
-          break;
-        case FILE_SLASH:
-          state = fileSlashState(c);
-          break;
-        case FILE_HOST:
-          state = fileHostState(c);
-          break;
-        case PATH_START:
-          state = pathStartState(c);
-          break;
-        case PATH:
-          state = pathState(c);
-          break;
-        case OPAQUE_PATH:
-          state = opaquePathState(c);
-          break;
-        case QUERY:
-          state = queryState(c);
-          break;
-        case FRAGMENT:
-          state = fragmentState(c);
-          break;
-        case FINISHED:
+        case SCHEME_START -> state = schemeStartState(c);
+        case SCHEME -> state = schemeState(c);
+        case NO_SCHEME -> state = noSchemeState(c);
+        case SPECIAL_REL_OR_AUTHORITY -> state = specialRelativeOrAuthorityState(c);
+        case PATH_OR_AUTHORITY -> state = pathOrAuthorityState(c);
+        case RELATIVE -> state = relativeState(c);
+        case RELATIVE_SLASH -> state = relativeSlashState(c);
+        case SPECIAL_AUTHORITY_SLASHES -> state = specialAuthoritySlashesState(c);
+        case SPECIAL_AUTHORITY_IGNORE_SLASHES -> state = specialAuthorityIgnoreSlashesState(c);
+        case AUTHORITY -> state = authorityState(c);
+        case HOST, HOSTNAME -> state = hostState(c, state);
+        case PORT -> state = portState(c);
+        case FILE -> state = fileState(c);
+        case FILE_SLASH -> state = fileSlashState(c);
+        case FILE_HOST -> state = fileHostState(c);
+        case PATH_START -> state = pathStartState(c);
+        case PATH -> state = pathState(c);
+        case OPAQUE_PATH -> state = opaquePathState(c);
+        case QUERY -> state = queryState(c);
+        case FRAGMENT -> state = fragmentState(c);
+        case FINISHED -> {
           return;
-        default:
+        }
+        default -> {
           assert false;
+        }
       }
     }
   }

@@ -65,10 +65,10 @@ public class Formatter {
 
   private static String formatArg(String spec, Object arg) {
     switch (spec) {
-      case "%s":
+      case "%s" -> {
         return ScriptRuntime.toString(arg);
-      case "%d":
-      case "%i":
+      }
+      case "%d", "%i" -> {
         // TODO need ScriptRuntime.isSymbol
         if (arg instanceof Symbol) {
           return "NaN";
@@ -78,17 +78,18 @@ public class Formatter {
           return ScriptRuntime.toString(ScriptRuntime.toInt32(d));
         }
         return ScriptRuntime.toString(d);
-      case "%f":
+      }
+      case "%f" -> {
         // TODO need ScriptRuntime.isSymbol
         if (arg instanceof Symbol) {
           return "NaN";
         }
         return ScriptRuntime.toString(ScriptRuntime.toNumber(arg));
-      case "%o":
-      case "%O":
+      }
+      case "%o", "%O" -> {
         return arg.toString();
-      default:
-        throw new AssertionError("Invalid spec " + spec);
+      }
+      default -> throw new AssertionError("Invalid spec " + spec);
     }
   }
 }

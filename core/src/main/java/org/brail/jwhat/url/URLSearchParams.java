@@ -51,9 +51,9 @@ public class URLSearchParams extends ScriptableObject {
         var pargs = (URLSearchParams) arg;
         p.params = new ArrayList<>(pargs.params);
         return p;
-      } else if (arg instanceof Scriptable) {
+      } else if (arg instanceof Scriptable s) {
         p.params = new ArrayList<>();
-        p.loadScriptable((Scriptable) arg);
+        p.loadScriptable(s);
         return p;
       } else if (arg != null && !Undefined.isUndefined(arg)) {
         p.loadString(arg);
@@ -82,8 +82,8 @@ public class URLSearchParams extends ScriptableObject {
 
   private void loadArray(Object[] a) {
     for (Object elt : a) {
-      if (elt instanceof Scriptable) {
-        Object[] elts = getArrayElementsIfPossible((Scriptable) elt);
+      if (elt instanceof Scriptable s) {
+        Object[] elts = getArrayElementsIfPossible(s);
         if (elts != null && elts.length == 2) {
           params.add(
               new AbstractMap.SimpleEntry<>(

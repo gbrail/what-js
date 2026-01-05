@@ -50,26 +50,26 @@ class DefaultWriter extends ScriptableObject {
     }
     this.stream = stream;
     switch (stream.state) {
-      case WRITABLE:
+      case WRITABLE -> {
         if (!stream.isCloseQueuedOrInFlight() && stream.isBackpressure()) {
           ready = PromiseAdapter.uninitialized(cx, scope);
         } else {
           ready = PromiseAdapter.resolved(cx, scope, Undefined.instance);
         }
         closed = PromiseAdapter.uninitialized(cx, scope);
-        break;
-      case ERRORING:
+      }
+      case ERRORING -> {
         ready = PromiseAdapter.rejected(cx, scope, stream.getError());
         closed = PromiseAdapter.uninitialized(cx, scope);
-        break;
-      case ERRORED:
+      }
+      case ERRORED -> {
         ready = PromiseAdapter.rejected(cx, scope, stream.getError());
         closed = PromiseAdapter.rejected(cx, scope, stream.getError());
-        break;
-      case CLOSED:
+      }
+      case CLOSED -> {
         ready = PromiseAdapter.resolved(cx, scope, Undefined.instance);
         closed = PromiseAdapter.resolved(cx, scope, Undefined.instance);
-        break;
+      }
     }
   }
 
@@ -152,19 +152,20 @@ class DefaultWriter extends ScriptableObject {
   private Object doWrite(Context cx, Scriptable scope, Object chunk) {
     var chunkSize = stream.getController().getChunkSize(cx, scope, chunk);
     switch (stream.getStreamState()) {
-      case ERRORED:
-      case ERRORING:
+      case ERRORED, ERRORING -> {
         return PromiseAdapter.rejected(cx, scope, stream.getError()).getPromise();
-      case CLOSED:
+      }
+      case CLOSED -> {
         return PromiseAdapter.rejected(
                 cx, scope, ScriptRuntime.typeError("Stream closing or closed"))
             .getPromise();
-      case WRITABLE:
+      }
+      case WRITABLE -> {
         var p = stream.addWriteRequest(cx, scope);
         stream.getController().doWrite(cx, scope, chunk, chunkSize);
         return p.getPromise();
-      default:
-        throw new IllegalStateException();
+      }
+      default -> throw new IllegalStateException();
     }
   }
 

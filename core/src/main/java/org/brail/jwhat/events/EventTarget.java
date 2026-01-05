@@ -47,11 +47,11 @@ public class EventTarget extends ScriptableObject {
     if (!(args[1] instanceof Scriptable target)) {
       return Undefined.instance;
     }
-    Object tb = ScriptableObject.getProperty(target, "handleEvent");
-    if (!(tb instanceof Callable)) {
+    var o = ScriptableObject.getProperty(target, "handleEvent");
+    if (!(o instanceof Callable tb)) {
       return Undefined.instance;
     }
-    var listener = new Listener(type, target, (Callable) tb);
+    var listener = new Listener(type, target, tb);
     realThis(thisObj)
         .listeners
         .compute(
@@ -80,11 +80,11 @@ public class EventTarget extends ScriptableObject {
     if (!(args[1] instanceof Scriptable target)) {
       return Undefined.instance;
     }
-    Object tb = ScriptableObject.getProperty(target, "handleEvent");
-    if (!(tb instanceof Callable)) {
+    var o = ScriptableObject.getProperty(target, "handleEvent");
+    if (!(o instanceof Callable tb)) {
       return Undefined.instance;
     }
-    var listener = new Listener(type, target, (Callable) tb);
+    var listener = new Listener(type, target, tb);
     var listeners = realThis(thisObj).listeners.get(type);
     listeners.remove(listener);
     return Undefined.instance;

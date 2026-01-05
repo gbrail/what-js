@@ -124,8 +124,8 @@ public class URL extends ScriptableObject {
     if (args.length > 1) {
       Object arg = args[1];
       if (arg != null && !Undefined.isUndefined(arg)) {
-        if (arg instanceof URL) {
-          return ((URL) arg).serialize();
+        if (arg instanceof URL u) {
+          return u.serialize();
         }
         return ScriptRuntime.toString(arg);
       }
