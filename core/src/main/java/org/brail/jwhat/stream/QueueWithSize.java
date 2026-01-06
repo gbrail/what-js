@@ -18,6 +18,9 @@ public class QueueWithSize<T> {
   }
 
   public T dequeue() {
+    if (queue.isEmpty()) {
+      return null;
+    }
     var val = queue.removeFirst();
     totalSize = Math.max(totalSize - val.size, 0.0);
     return val.value;

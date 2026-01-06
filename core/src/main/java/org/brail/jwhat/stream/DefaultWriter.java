@@ -1,5 +1,6 @@
 package org.brail.jwhat.stream;
 
+import org.brail.jwhat.core.impl.Errors;
 import org.brail.jwhat.core.impl.PromiseAdapter;
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.LambdaConstructor;
@@ -106,7 +107,7 @@ class DefaultWriter extends ScriptableObject {
       throw ScriptRuntime.typeError("Cannot close: no stream");
     }
     if (self.stream.isCloseQueuedOrInFlight()) {
-      return PromiseAdapter.rejected(cx, scope, ScriptRuntime.typeError("Close in flight"));
+      return PromiseAdapter.rejected(cx, scope, Errors.newTypeError(cx, scope, "Close in flight"));
     }
     return self.close(cx, scope);
   }
@@ -131,11 +132,13 @@ class DefaultWriter extends ScriptableObject {
   private static Object releaseLock(
       Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
     var self = realThis(thisObj);
-    var err = ScriptRuntime.typeError("Stream released");
+    var err = Errors.newTypeError(cx, scope, "Stream released");
     self.ensureReadyRejected(cx, scope, err);
     self.ensureCloseRejected(cx, scope, err);
-    self.stream.setWriter(null);
-    self.stream = null;
+    if (self.stream != null) {
+      self.stream.setWriter(null);
+      self.stream = null;
+    }
     return Undefined.instance;
   }
 
@@ -157,7 +160,7 @@ class DefaultWriter extends ScriptableObject {
       }
       case CLOSED -> {
         return PromiseAdapter.rejected(
-                cx, scope, ScriptRuntime.typeError("Stream closing or closed"))
+                cx, scope, Errors.newTypeError(cx, scope, "Stream closing or closed"))
             .getPromise();
       }
       case WRITABLE -> {
@@ -195,12 +198,16 @@ class DefaultWriter extends ScriptableObject {
   void ensureReadyRejected(Context cx, Scriptable scope, Object val) {
     if (ready.isPending()) {
       ready.reject(cx, scope, val);
+    } else {
+      ready = PromiseAdapter.rejected(cx, scope, val);
     }
   }
 
   void ensureCloseRejected(Context cx, Scriptable scope, Object val) {
     if (closed.isPending()) {
       closed.reject(cx, scope, val);
+    } else {
+      closed = PromiseAdapter.rejected(cx, scope, val);
     }
   }
 }

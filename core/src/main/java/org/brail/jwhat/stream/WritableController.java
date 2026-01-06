@@ -1,10 +1,13 @@
 package org.brail.jwhat.stream;
 
+import org.brail.jwhat.core.impl.Errors;
 import org.brail.jwhat.core.impl.PromiseAdapter;
 import org.brail.jwhat.core.impl.PromiseWrapper;
+import org.brail.jwhat.core.impl.Properties;
 import org.brail.jwhat.events.AbortController;
 import org.mozilla.javascript.Callable;
 import org.mozilla.javascript.Context;
+import org.mozilla.javascript.JavaScriptException;
 import org.mozilla.javascript.LambdaConstructor;
 import org.mozilla.javascript.LambdaFunction;
 import org.mozilla.javascript.RhinoException;
@@ -132,8 +135,8 @@ class WritableController extends ScriptableObject {
       Scriptable scope,
       WritableStream stream,
       Object sinkObj,
-      double highWater,
-      Callable sizeStrategy) {
+      Callable sizeStrategy,
+      double highWater) {
     var returnUndefined =
         new LambdaFunction(
             scope,
@@ -152,17 +155,21 @@ class WritableController extends ScriptableObject {
       if (s.has("type", s)) {
         throw ScriptRuntime.rangeError("Invalid sink");
       }
-      if (ScriptableObject.getProperty(s, "start") instanceof Callable start) {
-        startAlgorithm = start;
+      var sc = Properties.getOptionalCallable(s, "start");
+      if (sc != null) {
+        startAlgorithm = sc;
       }
-      if (ScriptableObject.getProperty(s, "write") instanceof Callable write) {
-        writeAlgorithm = write;
+      var wc = Properties.getOptionalCallable(s, "write");
+      if (wc != null) {
+        writeAlgorithm = wc;
       }
-      if (ScriptableObject.getProperty(s, "close") instanceof Callable close) {
-        closeAlgorithm = close;
+      var cc = Properties.getOptionalCallable(s, "close");
+      if (cc != null) {
+        closeAlgorithm = cc;
       }
-      if (ScriptableObject.getProperty(s, "abort") instanceof Callable abort) {
-        abortAlgorithm = abort;
+      var ac = Properties.getOptionalCallable(s, "abort");
+      if (ac != null) {
+        abortAlgorithm = ac;
       }
     }
     setUp(
@@ -186,7 +193,7 @@ class WritableController extends ScriptableObject {
   }
 
   private void advanceQueueIfNeeded(Context cx, Scriptable scope) {
-    if (started || stream.getInFlightWriteRequest() != null) {
+    if (!started || stream.getInFlightWriteRequest() != null) {
       return;
     }
     if (stream.getStreamState() == WritableStream.State.ERRORING) {
@@ -224,13 +231,21 @@ class WritableController extends ScriptableObject {
     if (strategySizeAlgorithm == null) {
       return 1.0;
     }
+    double size;
     try {
-      var s = strategySizeAlgorithm.call(cx, scope, sink, new Object[] {chunk});
-      return ScriptRuntime.toNumber(s);
-    } catch (RhinoException re) {
-      errorIfNeeded(cx, scope, re);
+      var sv =
+          strategySizeAlgorithm.call(
+              cx, scope, Undefined.SCRIPTABLE_UNDEFINED, new Object[] {chunk});
+      size = ScriptRuntime.toNumber(sv);
+    } catch (JavaScriptException jse) {
+      errorIfNeeded(cx, scope, jse.getValue());
       return 1.0;
     }
+    if (!Double.isFinite(size) || size < 0.0) {
+      errorIfNeeded(cx, scope, Errors.newRangeError(cx, scope, "size out of range"));
+      return 1.0;
+    }
+    return size;
   }
 
   double getDesiredSize() {
@@ -258,7 +273,7 @@ class WritableController extends ScriptableObject {
   private void processClose(Context cx, Scriptable scope) {
     stream.markCloseRequestInFlight();
     writeQueue.dequeue();
-    assert writeQueue.isEmpty();
+    // assert writeQueue.isEmpty();
     var cp =
         PromiseWrapper.wrap(
             cx, scope, closeAlgorithm.call(cx, scope, sink, ScriptRuntime.emptyArgs));

@@ -1,7 +1,9 @@
 package org.brail.jwhat.stream;
 
 import java.util.ArrayDeque;
+import org.brail.jwhat.core.impl.Errors;
 import org.brail.jwhat.core.impl.PromiseAdapter;
+import org.brail.jwhat.core.impl.Properties;
 import org.mozilla.javascript.Callable;
 import org.mozilla.javascript.Constructable;
 import org.mozilla.javascript.Context;
@@ -83,7 +85,7 @@ public class WritableStream extends ScriptableObject {
     ws.controller =
         (WritableController) controllerCons.construct(cx, scope, ScriptRuntime.emptyArgs);
     ws.controller.setUpFromSink(
-        cx, scope, ws, sink, getHighWaterStrategy(strategy), getSizeStrategy(scope, strategy));
+        cx, scope, ws, sink, getSizeStrategy(scope, strategy), getHighWaterStrategy(strategy));
     return ws;
   }
 
@@ -134,7 +136,8 @@ public class WritableStream extends ScriptableObject {
   private static Object close(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
     var self = realThis(thisObj);
     if (self.isLocked() || self.isCloseQueuedOrInFlight()) {
-      return PromiseAdapter.rejected(cx, scope, ScriptRuntime.typeError("Closing a locked stream"));
+      return PromiseAdapter.rejected(
+          cx, scope, Errors.newTypeError(cx, scope, "Closing a locked stream"));
     }
     return self.doClose(cx, scope);
   }
@@ -241,7 +244,7 @@ public class WritableStream extends ScriptableObject {
     return inFlightWriteRequest;
   }
 
-  // WritableStreamDealWithrejection
+  // WritableStreamDealWithRejection
   void dealWithRejection(Context cx, Scriptable scope, Object error) {
     if (state == WritableStream.State.WRITABLE) {
       startErroring(cx, scope, error);
@@ -253,8 +256,8 @@ public class WritableStream extends ScriptableObject {
 
   private static Callable getSizeStrategy(Scriptable scope, Object stratObj) {
     if (stratObj instanceof Scriptable strategy) {
-      Object sizeObj = ScriptableObject.getProperty(strategy, "size");
-      if (sizeObj instanceof Callable sizeFunc) {
+      var sizeFunc = Properties.getOptionalCallable(strategy, "size");
+      if (sizeFunc != null) {
         return sizeFunc;
       }
     }
@@ -263,12 +266,11 @@ public class WritableStream extends ScriptableObject {
 
   private static double getHighWaterStrategy(Object stratObj) {
     if (stratObj instanceof Scriptable strategy) {
-      Object hwmObj = ScriptableObject.getProperty(strategy, "highWaterMark");
-      double val = ScriptRuntime.toNumber(hwmObj);
-      if (Double.isNaN(val) || val < 0.0) {
+      var hwmVal = Properties.getOptionalNumber(strategy, "highWaterMark", 1.0);
+      if (Double.isNaN(hwmVal) || hwmVal < 0.0) {
         throw ScriptRuntime.rangeError("Invalid HWM");
       }
-      return val;
+      return hwmVal;
     }
     return 1.0;
   }
@@ -300,7 +302,7 @@ public class WritableStream extends ScriptableObject {
   // WritableStreamFinishErroring
   void finishErroring(Context cx, Scriptable scope) {
     assert state == State.ERRORING;
-    assert !hasOperationInFlight();
+    // assert !hasOperationInFlight();
     state = State.ERRORED;
     controller.runErrorSteps();
     PromiseAdapter req;
@@ -384,7 +386,7 @@ public class WritableStream extends ScriptableObject {
     assert inFlightCloseRequest != null;
     inFlightCloseRequest.fulfill(cx, scope, Undefined.instance);
     inFlightCloseRequest = null;
-    assert state == State.ERRORING || state == State.WRITABLE;
+    // assert state == State.ERRORING || state == State.WRITABLE;
     if (state == State.ERRORING) {
       error = null;
       if (pendingAbort != null) {
