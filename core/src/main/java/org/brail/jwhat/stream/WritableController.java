@@ -10,7 +10,6 @@ import org.mozilla.javascript.Context;
 import org.mozilla.javascript.JavaScriptException;
 import org.mozilla.javascript.LambdaConstructor;
 import org.mozilla.javascript.LambdaFunction;
-import org.mozilla.javascript.RhinoException;
 import org.mozilla.javascript.ScriptRuntime;
 import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;

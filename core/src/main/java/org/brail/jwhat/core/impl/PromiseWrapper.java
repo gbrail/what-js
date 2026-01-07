@@ -34,12 +34,11 @@ public class PromiseWrapper {
   }
 
   /**
-   * Wrap a function call that's supposed to return a promise. Return a
-   * rejected promise if it throws an exception.
+   * Wrap a function call that's supposed to return a promise. Return a rejected promise if it
+   * throws an exception.
    */
-  public static PromiseWrapper wrapCall(Context cx, Scriptable scope,
-                                        Scriptable thisObj, Object[] args,
-                                        Callable f) {
+  public static PromiseWrapper wrapCall(
+      Context cx, Scriptable scope, Scriptable thisObj, Object[] args, Callable f) {
     try {
       var result = f.call(cx, scope, thisObj, args);
       return wrap(cx, scope, result);

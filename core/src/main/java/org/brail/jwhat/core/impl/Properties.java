@@ -30,4 +30,22 @@ public class Properties {
     }
     return ScriptRuntime.toNumber(o);
   }
+
+  /** If "name" is not undefined, convert to a boolean using toBoolean. */
+  public static boolean getOptionalBoolean(Scriptable s, String name, boolean dflt) {
+    var o = ScriptableObject.getProperty(s, name);
+    if (o == null || o == Scriptable.NOT_FOUND || Undefined.isUndefined(o)) {
+      return dflt;
+    }
+    return ScriptRuntime.toBoolean(o);
+  }
+
+  /** If "name" is not undefined, return it */
+  public static Object getOptionalValue(Scriptable s, String name, Object dflt) {
+    var o = ScriptableObject.getProperty(s, name);
+    if (o == null || o == Scriptable.NOT_FOUND || Undefined.isUndefined(o)) {
+      return dflt;
+    }
+    return o;
+  }
 }

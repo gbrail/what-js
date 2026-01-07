@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
-import org.mozilla.javascript.Callable;
+import org.brail.jwhat.core.impl.Properties;
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.LambdaConstructor;
 import org.mozilla.javascript.ScriptRuntime;
@@ -40,53 +40,92 @@ public class EventTarget extends ScriptableObject {
 
   private static Object addListener(
       Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
-    if (args.length < 2) {
+    if (args.length < 1) {
       return Undefined.instance;
     }
     String type = ScriptRuntime.toString(args[0]);
-    if (!(args[1] instanceof Scriptable target)) {
+    Object cb = args.length > 1 ? args[1] : null;
+    Object opts = args.length > 2 ? args[2] : null;
+    var options = flattenMoreOptions(opts);
+
+    AbortSignal abortSignal = null;
+    if (options.signal instanceof AbortSignal as) {
+      abortSignal = as;
+    }
+    if (abortSignal != null && abortSignal.isAborted()) {
       return Undefined.instance;
     }
-    var o = ScriptableObject.getProperty(target, "handleEvent");
-    if (!(o instanceof Callable tb)) {
+    if (!(cb instanceof Scriptable callback)) {
       return Undefined.instance;
     }
-    var listener = new Listener(type, target, tb);
-    realThis(thisObj)
-        .listeners
-        .compute(
-            type,
-            (k, l) -> {
-              ArrayList<Listener> listeners;
-              if (l == null) {
-                listeners = new ArrayList<>();
-              } else {
-                listeners = (ArrayList<Listener>) l;
-              }
-              if (!listeners.contains(listener)) {
-                listeners.add(listener);
-              }
-              return listeners;
-            });
+    // Default passive value, but we don't have windows
+    Object passive = options.passive == null ? false : options.passive;
+
+    var listener = new Listener();
+    listener.type = type;
+    listener.callback = callback;
+    listener.capture = options.capture;
+    listener.passive = options.passive;
+    listener.once = options.once;
+    listener.signal = abortSignal;
+
+    var self = realThis(thisObj);
+    self.listeners.compute(
+        type,
+        (k, l) -> {
+          ArrayList<Listener> listeners;
+          if (l == null) {
+            listeners = new ArrayList<>();
+          } else {
+            listeners = (ArrayList<Listener>) l;
+          }
+          if (!listeners.contains(listener)) {
+            listeners.add(listener);
+          }
+          return listeners;
+        });
+
+    if (abortSignal != null) {
+      abortSignal.addStep(
+          (lcx, ls, to, la) -> {
+            self.removeListener(listener);
+            return Undefined.instance;
+          });
+    }
+
     return Undefined.instance;
+  }
+
+  private void removeListener(Listener l) {
+    var typeListener = listeners.get(l.type);
+    if (typeListener != null) {
+      // TODO probably have to set up more stuff or use == to compare here
+      typeListener.remove(l);
+    }
   }
 
   private static Object removeListener(
       Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
-    if (args.length < 2) {
+    if (args.length < 1) {
       return Undefined.instance;
     }
     String type = ScriptRuntime.toString(args[0]);
-    if (!(args[1] instanceof Scriptable target)) {
+    Object cb = args.length > 1 ? args[1] : null;
+    if (!(cb instanceof ScriptableObject callback)) {
       return Undefined.instance;
     }
-    var o = ScriptableObject.getProperty(target, "handleEvent");
-    if (!(o instanceof Callable tb)) {
-      return Undefined.instance;
-    }
-    var listener = new Listener(type, target, tb);
+    Object opts = args.length > 2 ? args[2] : null;
+    boolean capture = flattenOptions(opts);
+
+    var listener = new Listener();
+    listener.type = type;
+    listener.callback = callback;
+    listener.capture = capture;
+
     var listeners = realThis(thisObj).listeners.get(type);
-    listeners.remove(listener);
+    if (listeners != null) {
+      listeners.remove(listener);
+    }
     return Undefined.instance;
   }
 
@@ -106,34 +145,62 @@ public class EventTarget extends ScriptableObject {
     if (listeners == null || listeners.isEmpty()) {
       return false;
     }
+    throw new AssertionError("TODO: implement Dispatching Events section 2.9");
+    /*
     for (var l : listeners) {
       l.callback.call(cx, scope, l.target, new Object[] {event});
     }
     return true;
+     */
+  }
+
+  private static MoreOptions flattenMoreOptions(Object o) {
+    boolean capture = flattenOptions(o);
+    boolean once = false;
+    Object passive = null;
+    Object signal = null;
+    if (o instanceof Scriptable s) {
+      once = Properties.getOptionalBoolean(s, "once", false);
+      passive = Properties.getOptionalValue(s, "passive", null);
+      signal = Properties.getOptionalValue(s, "signal", null);
+    }
+    return new MoreOptions(capture, once, passive, signal);
+  }
+
+  private static boolean flattenOptions(Object o) {
+    if (o instanceof Boolean bo) {
+      return bo;
+    }
+    if (o instanceof Scriptable s) {
+      return Properties.getOptionalBoolean(s, "capture", false);
+    }
+    return false;
   }
 
   private static final class Listener {
-    final String type;
-    final Scriptable target;
-    final Callable callback;
-
-    Listener(String type, Scriptable target, Callable callback) {
-      this.type = type;
-      this.target = target;
-      this.callback = callback;
-    }
+    String type;
+    Scriptable callback;
+    boolean capture;
+    Object passive;
+    boolean once;
+    AbortSignal signal;
+    boolean removed;
 
     @Override
     public boolean equals(Object o) {
       if (this == o) return true;
       if (o == null || getClass() != o.getClass()) return false;
       Listener listener = (Listener) o;
-      return Objects.equals(type, listener.type) && target == listener.target;
+      return Objects.equals(type, listener.type)
+          && callback == listener.callback
+          && capture == listener.capture;
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(type, target);
+      return Objects.hash(type, callback, capture);
     }
   }
+
+  private record MoreOptions(boolean capture, boolean once, Object passive, Object signal) {}
 }
