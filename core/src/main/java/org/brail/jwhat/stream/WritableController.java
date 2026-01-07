@@ -215,8 +215,8 @@ class WritableController extends ScriptableObject {
   void doWrite(Context cx, Scriptable scope, Object chunk, double chunkSize) {
     try {
       writeQueue.enqueue(cx, scope, chunk, chunkSize);
-    } catch (RhinoException re) {
-      errorIfNeeded(cx, scope, re);
+    } catch (JavaScriptException re) {
+      errorIfNeeded(cx, scope, re.getValue());
       return;
     }
     if (!stream.isCloseQueuedOrInFlight()

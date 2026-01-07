@@ -2,6 +2,7 @@ package org.brail.jwhat.core.impl;
 
 import org.mozilla.javascript.Callable;
 import org.mozilla.javascript.Context;
+import org.mozilla.javascript.JavaScriptException;
 import org.mozilla.javascript.LambdaFunction;
 import org.mozilla.javascript.NativePromise;
 import org.mozilla.javascript.Scriptable;
@@ -30,6 +31,21 @@ public class PromiseWrapper {
       return new PromiseWrapper(pv);
     }
     return new PromiseWrapper(PromiseAdapter.newResolvedPromise(cx, scope, val));
+  }
+
+  /**
+   * Wrap a function call that's supposed to return a promise. Return a
+   * rejected promise if it throws an exception.
+   */
+  public static PromiseWrapper wrapCall(Context cx, Scriptable scope,
+                                        Scriptable thisObj, Object[] args,
+                                        Callable f) {
+    try {
+      var result = f.call(cx, scope, thisObj, args);
+      return wrap(cx, scope, result);
+    } catch (JavaScriptException jse) {
+      return new PromiseWrapper(PromiseAdapter.newRejectedPromise(cx, scope, jse.getValue()));
+    }
   }
 
   /** Register a callback that will be called when the promise resolves. */

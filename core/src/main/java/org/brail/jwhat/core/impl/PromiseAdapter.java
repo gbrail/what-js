@@ -50,6 +50,12 @@ public class PromiseAdapter {
     return (NativePromise) resolve.call(cx, scope, promise, new Object[] {value});
   }
 
+  static NativePromise newRejectedPromise(Context cx, Scriptable scope, Object value) {
+    Scriptable promise = (Scriptable) ScriptableObject.getProperty(scope, "Promise");
+    Callable resolve = (Callable) ScriptableObject.getProperty(promise, "reject");
+    return (NativePromise) resolve.call(cx, scope, promise, new Object[] {value});
+  }
+
   /** Create a promise that is already resolved. */
   public static PromiseAdapter resolved(Context cx, Scriptable scope, Object value) {
     return new PromiseAdapter(newResolvedPromise(cx, scope, value), null, null);
