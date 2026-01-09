@@ -29,7 +29,12 @@ test {
 
 spotless {
     java {
+        importOrder()
+        removeUnusedImports()
+        forbidWildcardImports()
         googleJavaFormat('1.33.0')
+        trimTrailingWhitespace()
+        endWithNewline()
     }
 }
 
