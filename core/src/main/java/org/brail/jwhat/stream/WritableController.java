@@ -1,7 +1,6 @@
 package org.brail.jwhat.stream;
 
 import org.brail.jwhat.core.impl.Errors;
-import org.brail.jwhat.core.impl.PromiseAdapter;
 import org.brail.jwhat.core.impl.PromiseWrapper;
 import org.brail.jwhat.core.impl.Properties;
 import org.brail.jwhat.events.AbortController;
@@ -9,7 +8,6 @@ import org.mozilla.javascript.Callable;
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.JavaScriptException;
 import org.mozilla.javascript.LambdaConstructor;
-import org.mozilla.javascript.LambdaFunction;
 import org.mozilla.javascript.ScriptRuntime;
 import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
@@ -136,16 +134,11 @@ class WritableController extends ScriptableObject {
       Object sinkObj,
       Callable sizeStrategy,
       double highWater) {
-    var returnUndefined =
-        new LambdaFunction(
-            scope,
-            "default",
-            0,
-            (lcx, ls, to, args) -> PromiseAdapter.resolved(cx, scope, Undefined.instance));
-    Callable startAlgorithm = returnUndefined;
-    Callable writeAlgorithm = returnUndefined;
-    Callable closeAlgorithm = returnUndefined;
-    Callable abortAlgorithm = returnUndefined;
+    var returnUndefPromise = AbstractOperations.returnUndefinedPromise(cx, scope);
+    Callable startAlgorithm = AbstractOperations.returnUndefined(cx, scope);
+    Callable writeAlgorithm = returnUndefPromise;
+    Callable closeAlgorithm = returnUndefPromise;
+    Callable abortAlgorithm = returnUndefPromise;
     if (sinkObj != null) {
       if (!(sinkObj instanceof Scriptable s)) {
         throw ScriptRuntime.typeError("Invalid sink type");

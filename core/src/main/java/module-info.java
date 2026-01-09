@@ -1,5 +1,6 @@
 module org.brail.jwhat.core {
   requires transitive org.mozilla.rhino;
+  requires jdk.jshell;
 
   exports org.brail.jwhat.events;
   exports org.brail.jwhat.console;

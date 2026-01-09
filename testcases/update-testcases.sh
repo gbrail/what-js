@@ -13,7 +13,10 @@ do
     then
       mkdir ${d}/resources
     fi
-    cp ../wpt/${d}/resources/* ${d}/resources
+    # cp ../wpt/${d}/resources/* ${d}/resources
+    npx babel ../wpt/${d}/resources \
+      --verbose \
+      --out-dir ${d}/resources
   fi
 done
 

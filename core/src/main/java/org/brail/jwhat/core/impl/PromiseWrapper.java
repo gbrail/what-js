@@ -48,7 +48,7 @@ public class PromiseWrapper {
   }
 
   /** Register a callback that will be called when the promise resolves. */
-  public void then(Context cx, Scriptable scope, ResultCallback cb) {
+  public Object then(Context cx, Scriptable scope, ResultCallback cb) {
     var resolve =
         new LambdaFunction(
             scope,
@@ -60,11 +60,11 @@ public class PromiseWrapper {
               return Undefined.instance;
             });
     var then = (Callable) ScriptableObject.getProperty(promise, "then");
-    then.call(cx, scope, promise, new Object[] {resolve});
+    return then.call(cx, scope, promise, new Object[] {resolve});
   }
 
   /** Register a callback that will be called when the promise resolves. */
-  public void then(
+  public Object then(
       Context cx, Scriptable scope, ResultCallback resolveCb, ResultCallback rejectCb) {
     var resolve =
         new LambdaFunction(
@@ -87,6 +87,6 @@ public class PromiseWrapper {
               return Undefined.instance;
             });
     var then = (Callable) ScriptableObject.getProperty(promise, "then");
-    then.call(cx, scope, promise, new Object[] {resolve, reject});
+    return then.call(cx, scope, promise, new Object[] {resolve, reject});
   }
 }

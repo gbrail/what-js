@@ -8,9 +8,8 @@ self.delay = ms => new Promise(resolve => step_timeout(resolve, ms));
 // Some tests include promise resolutions which may mean the test code takes a couple of event loop visits itself. So go
 // around an extra 2 times to avoid complicating those tests.
 self.flushAsyncEvents = () => delay(0).then(() => delay(0)).then(() => delay(0)).then(() => delay(0));
-
 self.assert_typed_array_equals = (actual, expected, message) => {
-  const prefix = message === undefined ? '' : `${message} `;
+  var prefix = message === undefined ? '' : `${message} `;
   assert_equals(typeof actual, 'object', `${prefix}type is object`);
   assert_equals(actual.constructor, expected.constructor, `${prefix}constructor`);
   assert_equals(actual.byteOffset, expected.byteOffset, `${prefix}byteOffset`);
@@ -19,9 +18,10 @@ self.assert_typed_array_equals = (actual, expected, message) => {
   assert_array_equals([...actual], [...expected], `${prefix}contents`);
   assert_array_equals([...new Uint8Array(actual.buffer)], [...new Uint8Array(expected.buffer)], `${prefix}buffer contents`);
 };
-
 self.makePromiseAndResolveFunc = () => {
-  let resolve;
-  const promise = new Promise(r => { resolve = r; });
+  var resolve;
+  var promise = new Promise(r => {
+    resolve = r;
+  });
   return [promise, resolve];
 };

@@ -3,12 +3,10 @@ package org.brail.jwhat.stream;
 import java.util.ArrayDeque;
 import org.brail.jwhat.core.impl.Errors;
 import org.brail.jwhat.core.impl.PromiseAdapter;
-import org.brail.jwhat.core.impl.Properties;
 import org.mozilla.javascript.Callable;
 import org.mozilla.javascript.Constructable;
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.LambdaConstructor;
-import org.mozilla.javascript.LambdaFunction;
 import org.mozilla.javascript.ScriptRuntime;
 import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
@@ -85,7 +83,12 @@ public class WritableStream extends ScriptableObject {
     ws.controller =
         (WritableController) controllerCons.construct(cx, scope, ScriptRuntime.emptyArgs);
     ws.controller.setUpFromSink(
-        cx, scope, ws, sink, getSizeStrategy(scope, strategy), getHighWaterStrategy(strategy));
+        cx,
+        scope,
+        ws,
+        sink,
+        AbstractOperations.getSizeStrategy(scope, strategy),
+        AbstractOperations.getHighWaterStrategy(strategy, 1.0));
     return ws;
   }
 
@@ -252,27 +255,6 @@ public class WritableStream extends ScriptableObject {
       assert state == State.ERRORING;
       finishErroring(cx, scope);
     }
-  }
-
-  private static Callable getSizeStrategy(Scriptable scope, Object stratObj) {
-    if (stratObj instanceof Scriptable strategy) {
-      var sizeFunc = Properties.getOptionalCallable(strategy, "size");
-      if (sizeFunc != null) {
-        return sizeFunc;
-      }
-    }
-    return new LambdaFunction(scope, "getSize", 0, (cx1, scope1, thisObj, args) -> 1.0);
-  }
-
-  private static double getHighWaterStrategy(Object stratObj) {
-    if (stratObj instanceof Scriptable strategy) {
-      var hwmVal = Properties.getOptionalNumber(strategy, "highWaterMark", 1.0);
-      if (Double.isNaN(hwmVal) || hwmVal < 0.0) {
-        throw ScriptRuntime.rangeError("Invalid HWM");
-      }
-      return hwmVal;
-    }
-    return 1.0;
   }
 
   // WritableStreamAddWriteRequest
