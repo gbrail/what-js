@@ -11,6 +11,7 @@ import java.util.function.BiConsumer;
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.Function;
 import org.mozilla.javascript.LambdaFunction;
+import org.mozilla.javascript.Script;
 import org.mozilla.javascript.ScriptRuntime;
 import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.Undefined;
@@ -18,7 +19,8 @@ import org.mozilla.javascript.Undefined;
 public class WPTTestLauncher {
   static final String TEST_BASE = "../testcases";
 
-  private final StringBuilder testHarness;
+  private final Script testHarness;
+  private final ArrayList<Script> testResources = new ArrayList<>();
   private BiConsumer<Context, Scriptable> setupCallback;
 
   public static WPTTestLauncher newLauncher() throws IOException {
@@ -36,7 +38,10 @@ public class WPTTestLauncher {
     add_completion_callback(__testCompletionTracker);
     """);
 
-    return new WPTTestLauncher(completeTestScript);
+    try (Context cx = Context.enter()) {
+      var cs = cx.compileString(completeTestScript.toString(), "testharness.js", 1, null);
+      return new WPTTestLauncher(cs);
+    }
   }
 
   public void setSetupCallback(BiConsumer<Context, Scriptable> callback) {
@@ -44,11 +49,16 @@ public class WPTTestLauncher {
   }
 
   public void addResource(String path) throws IOException {
-    testHarness.append(Utils.readResource("org/brail/jwhat/framework/" + path));
+    try (Context cx = Context.enter()) {
+      try (var rdr = Utils.openResource("org/brail/jwhat/framework/" + path)) {
+        var s = cx.compileReader(rdr, path, 1, null);
+        testResources.add(s);
+      }
+    }
   }
 
-  private WPTTestLauncher(StringBuilder script) {
-    this.testHarness = script;
+  private WPTTestLauncher(Script s) {
+    this.testHarness = s;
   }
 
   private Scriptable initializeScope(Context cx, ResultTracker tracker) throws IOException {
@@ -83,9 +93,15 @@ public class WPTTestLauncher {
     var tracker = new ResultTracker();
     // Run each test suite in a separate scope to prevent cross-contamination.
     var scope = initializeScope(cx, tracker);
-    // For the harness to actually work, build the whole harness and our
-    // test script into a big script and run it all together.
-    cx.evaluateString(scope, String.valueOf(testHarness) + script, "test.js", 1, null);
+    // The framework expects promises to not be resolved until everything is run
+    // as if it were one big giant script.
+    cx.suspendMicrotaskProcessing();
+    try {
+      testHarness.exec(cx, scope, null);
+      cx.evaluateString(scope, script.toString(), "test.js", 1, null);
+    } finally {
+      cx.resumeMicrotaskProcessing();
+    }
     return tracker;
   }
 
@@ -99,12 +115,19 @@ public class WPTTestLauncher {
     if (pp.getNameCount() <= 2) {
       throw new AssertionError("too short: " + pp);
     }
-    HelperLoader.loadHelpers(cx, scope, script, testPath.getParent());
     setBase.call(cx, scope, null, new Object[] {testPath.getParent().toString()});
+    cx.suspendMicrotaskProcessing();
     try {
-      cx.evaluateString(scope, testHarness + script, testPath.getFileName().toString(), 1, null);
+      testHarness.exec(cx, scope, null);
+      for (var r : testResources) {
+        r.exec(cx, scope, null);
+      }
+      HelperLoader.loadHelpers(cx, scope, script, testPath.getParent());
+      cx.evaluateString(scope, script, testPath.getFileName().toString(), 1, null);
     } catch (Throwable t) {
       tracker.trackException(t);
+    } finally {
+      cx.resumeMicrotaskProcessing();
     }
     return tracker;
   }
