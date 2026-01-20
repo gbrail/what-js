@@ -12,7 +12,7 @@ import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
 import org.mozilla.javascript.Undefined;
 
-public class DefaultReadableController extends ScriptableObject {
+public class ReadableController extends AbstractReadableController {
   private ReadableStream stream;
   private Scriptable source;
   private Callable cancelAlgorithm;
@@ -28,27 +28,27 @@ public class DefaultReadableController extends ScriptableObject {
   public static Constructable init(Context cx, Scriptable scope) {
     var c =
         new LambdaConstructor(
-            scope, "ReadableStreamDefaultController", 0, DefaultReadableController::constructor);
-    c.definePrototypeMethod(scope, "close", 0, DefaultReadableController::close);
-    c.definePrototypeMethod(scope, "enqueue", 1, DefaultReadableController::enqueue);
-    c.definePrototypeMethod(scope, "error", 0, DefaultReadableController::error);
-    c.definePrototypeProperty(cx, "desiredSize", DefaultReadableController::getDesiredSize);
+            scope, "ReadableStreamDefaultController", 0, ReadableController::constructor);
+    c.definePrototypeMethod(scope, "close", 0, ReadableController::close);
+    c.definePrototypeMethod(scope, "enqueue", 1, ReadableController::enqueue);
+    c.definePrototypeMethod(scope, "error", 0, ReadableController::error);
+    c.definePrototypeProperty(cx, "desiredSize", ReadableController::getDesiredSize);
     return c;
   }
 
-  private DefaultReadableController() {}
+  private ReadableController() {}
 
   @Override
   public String getClassName() {
     return "ReadableStreamDefaultController;";
   }
 
-  private static DefaultReadableController realThis(Scriptable thisObj) {
-    return LambdaConstructor.convertThisObject(thisObj, DefaultReadableController.class);
+  private static ReadableController realThis(Scriptable thisObj) {
+    return LambdaConstructor.convertThisObject(thisObj, ReadableController.class);
   }
 
   private static Scriptable constructor(Context cx, Scriptable scope, Object[] args) {
-    return new DefaultReadableController();
+    return new ReadableController();
   }
 
   // SetUpReadableStreamDefaultControllerFromUnderlyingSource
@@ -241,6 +241,7 @@ public class DefaultReadableController extends ScriptableObject {
   }
 
   // Steps that may differ between controllers
+  @Override
   PromiseWrapper cancelSteps(Context cx, Scriptable scope, Object reason) {
     readQueue.reset();
     var cp = PromiseWrapper.wrapCall(cx, scope, source, new Object[] {reason}, cancelAlgorithm);
@@ -248,6 +249,7 @@ public class DefaultReadableController extends ScriptableObject {
     return cp;
   }
 
+  @Override
   void pullSteps(Context cx, Scriptable scope, DefaultReader.ReadRequest rr) {
     if (!readQueue.isEmpty()) {
       var chunk = readQueue.dequeue();
@@ -263,6 +265,7 @@ public class DefaultReadableController extends ScriptableObject {
     }
   }
 
+  @Override
   void releaseSteps() {
     // Nothing to do for now
   }

@@ -8,11 +8,9 @@ import org.mozilla.javascript.Context;
 import org.mozilla.javascript.LambdaConstructor;
 import org.mozilla.javascript.ScriptRuntime;
 import org.mozilla.javascript.Scriptable;
-import org.mozilla.javascript.ScriptableObject;
 import org.mozilla.javascript.Undefined;
 
-public class DefaultReader extends ScriptableObject {
-  PromiseAdapter closed;
+public class DefaultReader extends AbstractReader {
   ReadableStream stream;
   final ArrayDeque<ReadRequest> readRequests = new ArrayDeque<>();
 

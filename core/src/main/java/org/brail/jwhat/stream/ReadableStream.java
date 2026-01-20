@@ -20,14 +20,15 @@ public class ReadableStream extends ScriptableObject {
 
   private Constructable readerConstructor;
   State state;
-  DefaultReadableController controller;
+  AbstractReadableController controller;
   boolean disturbed;
-  DefaultReader reader;
+  AbstractReader reader;
   Object error;
 
   public static void init(Context cx, Scriptable scope) {
     var readerConstructor = DefaultReader.init(cx, scope);
-    var controllerConstructor = DefaultReadableController.init(cx, scope);
+    var dfltController = ReadableController.init(cx, scope);
+    var byteController = ReadableByteStreamController.init(cx, scope);
     var c =
         new LambdaConstructor(
             scope,
@@ -35,7 +36,7 @@ public class ReadableStream extends ScriptableObject {
             2,
             LambdaConstructor.CONSTRUCTOR_DEFAULT,
             (lcx, ls, args) ->
-                constructor(lcx, ls, args, readerConstructor, controllerConstructor));
+                constructor(lcx, ls, args, readerConstructor, dfltController));
     c.definePrototypeMethod(scope, "from", 1, ReadableStream::from);
     c.definePrototypeMethod(scope, "cancel", 1, ReadableStream::cancel);
     c.definePrototypeMethod(scope, "getReader", 1, ReadableStream::getReader);
@@ -48,7 +49,10 @@ public class ReadableStream extends ScriptableObject {
     ScriptableObject.defineProperty(
         scope, "ReadableStreamDefaultReader", readerConstructor, DONTENUM);
     ScriptableObject.defineProperty(
-        scope, "ReadableStreamDefaultController", controllerConstructor, DONTENUM);
+        scope, "ReadableStreamDefaultController", dfltController, DONTENUM);
+    ScriptableObject.defineProperty(
+            scope, "ReadableByteStreamController", byteController, DONTENUM);
+    )
   }
 
   private ReadableStream() {}
@@ -67,7 +71,8 @@ public class ReadableStream extends ScriptableObject {
       Scriptable scope,
       Object[] args,
       Constructable readerCons,
-      Constructable controllerCons) {
+      Constructable dfltController,
+      Constructable bytesController) {
     Object source = args.length > 0 ? args[0] : null;
     Object strategy = args.length > 1 ? args[1] : null;
     var rs = new ReadableStream();
@@ -75,19 +80,29 @@ public class ReadableStream extends ScriptableObject {
     rs.readerConstructor = readerCons;
     if (source instanceof Scriptable ss) {
       if ("bytes".equals(Properties.getOptionalValue(ss, "type", ""))) {
-        throw new AssertionError("bytes not yet implemented");
+        var controller =
+                (ReadableByteStreamController) bytesController.construct(cx, scope, ScriptRuntime.emptyArgs);
+        controller.setUpFromSource(cx,
+                scope,
+                rs,
+                source,
+                AbstractOperations.getHighWaterStrategy(scope, 1.0));
+        rs.controller = controller;
+        return rs;
       }
-      // TODO Set up readable byte stream here and return
     }
-    rs.controller =
-        (DefaultReadableController) controllerCons.construct(cx, scope, ScriptRuntime.emptyArgs);
-    rs.controller.setUpFromSource(
+
+    // Fall through for default case
+    var controller =
+        (ReadableController) dfltController.construct(cx, scope, ScriptRuntime.emptyArgs);
+    controller.setUpFromSource(
         cx,
         scope,
         rs,
         source,
         AbstractOperations.getSizeStrategy(scope, strategy),
         AbstractOperations.getHighWaterStrategy(scope, 1.0));
+    rs.controller = controller;
     return rs;
   }
 
@@ -156,6 +171,14 @@ public class ReadableStream extends ScriptableObject {
     return realThis(thisObj).isLocked();
   }
 
+  boolean hasDefaultReader() {
+    return reader instanceof DefaultReader;
+  }
+
+  boolean hasBYOBReader() {
+    return reader instanceof BYOBReader;
+  }
+
   // IsReadableStreamLocked
   boolean isLocked() {
     return reader != null;
@@ -163,15 +186,22 @@ public class ReadableStream extends ScriptableObject {
 
   // ReadableStreamGetNumReadRequests
   int getNumReadRequests() {
-    assert reader != null;
-    return reader.getNumReadRequests();
+    assert hasDefaultReader();
+    return ((DefaultReader)reader).getNumReadRequests();
+  }
+
+  int getNumReadIntoRequests() {
+    assert hasBYOBReader();
+    return ((BYOBReader)reader).getNumReadIntoRequests();
   }
 
   // ReadableStreamFulfillReadRequest
   void fulfillReadRequest(Context cx, Scriptable scope, Object chunk, boolean done) {
+    assert reader instanceof DefaultReader;
+    var dr = (DefaultReader) reader;
     // check that it's the default reader?
-    assert !reader.readRequests.isEmpty();
-    var rr = reader.readRequests.pop();
+    assert !dr.readRequests.isEmpty();
+    var rr = dr.readRequests.pop();
     if (done) {
       rr.getCloseSteps().handle(cx, scope);
     } else {
@@ -185,8 +215,11 @@ public class ReadableStream extends ScriptableObject {
     error = err;
     if (reader != null) {
       reader.closed.reject(cx, scope, err);
-      // TODO check for BYOB reader
-      reader.errorReadRequests(cx, scope, err);
+      if (reader instanceof DefaultReader dr) {
+        dr.errorReadRequests(cx, scope, err);
+      } else {
+        throw new AssertionError("BYOBReader not implemented yet");
+      }
     }
   }
 
@@ -195,10 +228,11 @@ public class ReadableStream extends ScriptableObject {
     state = State.CLOSED;
     if (reader != null) {
       reader.closed.fulfill(cx, scope, Undefined.instance);
-      // TODO check for BYOB reader
-      DefaultReader.ReadRequest rr;
-      while ((rr = reader.readRequests.poll()) != null) {
-        rr.getCloseSteps().handle(cx, scope);
+      if (reader instanceof DefaultReader dr) {
+        DefaultReader.ReadRequest rr;
+        while ((rr = dr.readRequests.poll()) != null) {
+          rr.getCloseSteps().handle(cx, scope);
+        }
       }
     }
   }
