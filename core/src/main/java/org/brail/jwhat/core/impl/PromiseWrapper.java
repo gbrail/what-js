@@ -8,6 +8,7 @@ import org.mozilla.javascript.NativePromise;
 import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
 import org.mozilla.javascript.Undefined;
+import org.mozilla.javascript.VarScope;
 
 /** PromiseWrapper adapts a Rhino Promise so that we can take action when it is resolved. */
 public class PromiseWrapper {
@@ -26,7 +27,7 @@ public class PromiseWrapper {
    * promise. If a regular value, then the adapter will be backed by a promise that is already
    * resolved.
    */
-  public static PromiseWrapper wrap(Context cx, Scriptable scope, Object val) {
+  public static PromiseWrapper wrap(Context cx, VarScope scope, Object val) {
     if (val instanceof NativePromise pv) {
       return new PromiseWrapper(pv);
     }
@@ -38,7 +39,7 @@ public class PromiseWrapper {
    * throws an exception.
    */
   public static PromiseWrapper wrapCall(
-      Context cx, Scriptable scope, Scriptable thisObj, Object[] args, Callable f) {
+      Context cx, VarScope scope, Scriptable thisObj, Object[] args, Callable f) {
     try {
       var result = f.call(cx, scope, thisObj, args);
       return wrap(cx, scope, result);
@@ -48,7 +49,7 @@ public class PromiseWrapper {
   }
 
   /** Register a callback that will be called when the promise resolves. */
-  public void then(Context cx, Scriptable scope, ResultCallback cb) {
+  public void then(Context cx, VarScope scope, ResultCallback cb) {
     var resolve =
         new LambdaFunction(
             scope,
@@ -65,7 +66,7 @@ public class PromiseWrapper {
 
   /** Register a callback that will be called when the promise resolves. */
   public void then(
-      Context cx, Scriptable scope, ResultCallback resolveCb, ResultCallback rejectCb) {
+      Context cx, VarScope scope, ResultCallback resolveCb, ResultCallback rejectCb) {
     var resolve =
         new LambdaFunction(
             scope,

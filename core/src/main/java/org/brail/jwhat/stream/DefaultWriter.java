@@ -8,13 +8,14 @@ import org.mozilla.javascript.ScriptRuntime;
 import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
 import org.mozilla.javascript.Undefined;
+import org.mozilla.javascript.VarScope;
 
 class DefaultWriter extends ScriptableObject {
   private WritableStream stream;
   PromiseAdapter closed;
   PromiseAdapter ready;
 
-  public static LambdaConstructor init(Context cx, Scriptable scope) {
+  public static LambdaConstructor init(Context cx, VarScope scope) {
     var constructor =
         new LambdaConstructor(
             scope,
@@ -45,7 +46,7 @@ class DefaultWriter extends ScriptableObject {
   }
 
   // SetUpWritableStreamDefaultWriter
-  void setUp(Context cx, Scriptable scope, WritableStream stream) {
+  void setUp(Context cx, VarScope scope, WritableStream stream) {
     if (stream.isLocked()) {
       throw ScriptRuntime.typeError("Stream already locked");
     }
@@ -74,7 +75,7 @@ class DefaultWriter extends ScriptableObject {
     }
   }
 
-  private static Scriptable constructor(Context cx, Scriptable scope, Object[] args) {
+  private static Scriptable constructor(Context cx, VarScope scope, Object[] args) {
     if (args.length < 1 || !(args[0] instanceof WritableStream stream)) {
       throw ScriptRuntime.typeError("Stream required");
     }
@@ -87,7 +88,7 @@ class DefaultWriter extends ScriptableObject {
     return w;
   }
 
-  private static Object abort(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+  private static Object abort(Context cx, VarScope scope, Scriptable thisObj, Object[] args) {
     var self = realThis(thisObj);
     if (self.stream == null) {
       throw ScriptRuntime.typeError("Cannot abort: no stream");
@@ -97,11 +98,11 @@ class DefaultWriter extends ScriptableObject {
   }
 
   // WritableStreamDefaultWriterAbort
-  private Object abort(Context cx, Scriptable scope, Object reason) {
+  private Object abort(Context cx, VarScope scope, Object reason) {
     return stream.abort(cx, scope, reason);
   }
 
-  private static Object close(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+  private static Object close(Context cx, VarScope scope, Scriptable thisObj, Object[] args) {
     var self = realThis(thisObj);
     if (self.stream == null) {
       throw ScriptRuntime.typeError("Cannot close: no stream");
@@ -113,12 +114,12 @@ class DefaultWriter extends ScriptableObject {
   }
 
   // WritableStreamDefaultWriterClose
-  private Object close(Context cx, Scriptable scope) {
+  private Object close(Context cx, VarScope scope) {
     return stream.doClose(cx, scope);
   }
 
   // WriteableStreamDefaultWriterCloseWithErrorPropagation
-  Object closeWithErrorPropagation(Context cx, Scriptable scope) {
+  Object closeWithErrorPropagation(Context cx, VarScope scope) {
     if (stream.isCloseQueuedOrInFlight() || stream.state == WritableStream.State.CLOSED) {
       return PromiseAdapter.resolved(cx, scope, Undefined.instance).getPromise();
     }
@@ -130,7 +131,7 @@ class DefaultWriter extends ScriptableObject {
 
   // WritableStreamDefaultWriterRelease
   private static Object releaseLock(
-      Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+      Context cx, VarScope scope, Scriptable thisObj, Object[] args) {
     var self = realThis(thisObj);
     var err = Errors.newTypeError(cx, scope, "Stream released");
     self.ensureReadyRejected(cx, scope, err);
@@ -142,7 +143,7 @@ class DefaultWriter extends ScriptableObject {
     return Undefined.instance;
   }
 
-  private static Object write(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+  private static Object write(Context cx, VarScope scope, Scriptable thisObj, Object[] args) {
     var self = realThis(thisObj);
     if (self.stream == null) {
       throw ScriptRuntime.typeError("Cannot write: no stream");
@@ -152,7 +153,7 @@ class DefaultWriter extends ScriptableObject {
   }
 
   // WritableStreamDefaultWriterWrite
-  private Object doWrite(Context cx, Scriptable scope, Object chunk) {
+  private Object doWrite(Context cx, VarScope scope, Object chunk) {
     var chunkSize = stream.getController().getChunkSize(cx, scope, chunk);
     switch (stream.getStreamState()) {
       case ERRORED, ERRORING -> {
@@ -195,7 +196,7 @@ class DefaultWriter extends ScriptableObject {
     };
   }
 
-  void ensureReadyRejected(Context cx, Scriptable scope, Object val) {
+  void ensureReadyRejected(Context cx, VarScope scope, Object val) {
     if (ready.isPending()) {
       ready.reject(cx, scope, val);
     } else {
@@ -203,7 +204,7 @@ class DefaultWriter extends ScriptableObject {
     }
   }
 
-  void ensureCloseRejected(Context cx, Scriptable scope, Object val) {
+  void ensureCloseRejected(Context cx, VarScope scope, Object val) {
     if (closed.isPending()) {
       closed.reject(cx, scope, val);
     } else {

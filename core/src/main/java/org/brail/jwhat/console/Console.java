@@ -7,9 +7,11 @@ import org.mozilla.javascript.Context;
 import org.mozilla.javascript.LambdaFunction;
 import org.mozilla.javascript.ScriptRuntime;
 import org.mozilla.javascript.Scriptable;
+import org.mozilla.javascript.VarScope;
 import org.mozilla.javascript.ScriptableObject;
 import org.mozilla.javascript.SymbolKey;
 import org.mozilla.javascript.Undefined;
+import org.mozilla.javascript.VarScope;
 
 public class Console extends ScriptableObject {
   public enum Level {
@@ -37,7 +39,7 @@ public class Console extends ScriptableObject {
       return this;
     }
 
-    public void install(Context cx, Scriptable scope) {
+    public void install(Context cx, VarScope scope) {
       if (printer == null) {
         printer = new StdoutPrinter();
       }
@@ -54,7 +56,7 @@ public class Console extends ScriptableObject {
     return new Builder();
   }
 
-  public void init(Context cx, Scriptable scope) {
+  public void init(Context cx, VarScope scope) {
     setParentScope(scope);
     setPrototype(cx.newObject(scope));
     defineProperty(

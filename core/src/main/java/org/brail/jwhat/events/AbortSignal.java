@@ -1,6 +1,7 @@
 package org.brail.jwhat.events;
 
 import java.util.ArrayList;
+
 import org.mozilla.javascript.Callable;
 import org.mozilla.javascript.Constructable;
 import org.mozilla.javascript.Context;
@@ -9,13 +10,14 @@ import org.mozilla.javascript.LambdaConstructor;
 import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
 import org.mozilla.javascript.Undefined;
+import org.mozilla.javascript.VarScope;
 
 public class AbortSignal extends ScriptableObject {
   Object reason = Undefined.instance;
   Scriptable onAbort;
   private final ArrayList<Callable> steps = new ArrayList<>();
 
-  public static void init(Context cx, Scriptable scope) {
+  public static void init(Context cx, VarScope scope) {
     var c = new LambdaConstructor(scope, "AbortSignal", 0, AbortSignal::constructor);
     c.defineConstructorMethod(scope, "abort", 1, (lcx, ls, to, args) -> abort(lcx, ls, args, c));
     c.definePrototypeProperty(cx, "aborted", AbortSignal::isAborted);
@@ -44,7 +46,7 @@ public class AbortSignal extends ScriptableObject {
     return LambdaConstructor.convertThisObject(thisObj, AbortSignal.class);
   }
 
-  private static Scriptable constructor(Context cx, Scriptable scope, Object[] args) {
+  private static Scriptable constructor(Context cx, VarScope scope, Object[] args) {
     return new AbortSignal();
   }
 
@@ -87,14 +89,14 @@ public class AbortSignal extends ScriptableObject {
   }
 
   private static Object abort(
-      Context cx, Scriptable scope, Object[] args, Constructable constructor) {
+      Context cx, VarScope scope, Object[] args, Constructable constructor) {
     var s = (AbortSignal) constructor.construct(cx, scope, args);
     s.reason = getAbortReason(args);
     return s;
   }
 
   private static Object throwIfAborted(
-      Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+      Context cx, VarScope scope, Scriptable thisObj, Object[] args) {
     var self = realThis(thisObj);
     if (self.reason != Undefined.instance) {
       throw new JavaScriptException(self.reason);

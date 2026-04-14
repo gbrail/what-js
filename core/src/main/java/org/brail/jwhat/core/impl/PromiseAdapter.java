@@ -1,6 +1,7 @@
 package org.brail.jwhat.core.impl;
 
 import java.util.concurrent.atomic.AtomicReference;
+
 import org.mozilla.javascript.Callable;
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.LambdaFunction;
@@ -8,6 +9,7 @@ import org.mozilla.javascript.NativePromise;
 import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
 import org.mozilla.javascript.Undefined;
+import org.mozilla.javascript.VarScope;
 
 /** PromiseAdapter creates a Promise in Rhino and allows us to resolve or reject it when we need. */
 public class PromiseAdapter {
@@ -44,25 +46,25 @@ public class PromiseAdapter {
     return a;
   }
 
-  static NativePromise newResolvedPromise(Context cx, Scriptable scope, Object value) {
+  static NativePromise newResolvedPromise(Context cx, VarScope scope, Object value) {
     Scriptable promise = (Scriptable) ScriptableObject.getProperty(scope, "Promise");
     Callable resolve = (Callable) ScriptableObject.getProperty(promise, "resolve");
     return (NativePromise) resolve.call(cx, scope, promise, new Object[] {value});
   }
 
-  static NativePromise newRejectedPromise(Context cx, Scriptable scope, Object value) {
+  static NativePromise newRejectedPromise(Context cx, VarScope scope, Object value) {
     Scriptable promise = (Scriptable) ScriptableObject.getProperty(scope, "Promise");
     Callable resolve = (Callable) ScriptableObject.getProperty(promise, "reject");
     return (NativePromise) resolve.call(cx, scope, promise, new Object[] {value});
   }
 
   /** Create a promise that is already resolved. */
-  public static PromiseAdapter resolved(Context cx, Scriptable scope, Object value) {
+  public static PromiseAdapter resolved(Context cx, VarScope scope, Object value) {
     return new PromiseAdapter(newResolvedPromise(cx, scope, value), null, null);
   }
 
   /** Create a promise that is already rejected. */
-  public static PromiseAdapter rejected(Context cx, Scriptable scope, Object value) {
+  public static PromiseAdapter rejected(Context cx, VarScope scope, Object value) {
     Scriptable promise = (Scriptable) ScriptableObject.getProperty(scope, "Promise");
     Callable reject = (Callable) ScriptableObject.getProperty(promise, "reject");
     NativePromise p = (NativePromise) reject.call(cx, scope, promise, new Object[] {value});
@@ -87,7 +89,7 @@ public class PromiseAdapter {
    * Deliver a result to this promise and resolve it. It is invalid to call this if "resolved" or
    * "rejected" was used.
    */
-  public void fulfill(Context cx, Scriptable scope, Object value) {
+  public void fulfill(Context cx, VarScope scope, Object value) {
     if (pending) {
       pending = false;
       resolve.call(cx, scope, promise, new Object[] {value});
@@ -98,7 +100,7 @@ public class PromiseAdapter {
    * Deliver an error to this promise and reject it. It is invalid to call this if "resolved" or
    * "rejected" was used.
    */
-  public void reject(Context cx, Scriptable scope, Object error) {
+  public void reject(Context cx, VarScope scope, Object error) {
     if (pending) {
       pending = false;
       reject.call(cx, scope, promise, new Object[] {error});

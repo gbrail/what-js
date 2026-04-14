@@ -14,6 +14,7 @@ import org.mozilla.javascript.ScriptRuntime;
 import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
 import org.mozilla.javascript.Undefined;
+import org.mozilla.javascript.VarScope;
 
 class WritableController extends ScriptableObject {
   private WritableStream stream;
@@ -29,7 +30,7 @@ class WritableController extends ScriptableObject {
 
   private static final Object CLOSE_SENTINEL = new Object();
 
-  public static LambdaConstructor init(Context cx, Scriptable scope) {
+  public static LambdaConstructor init(Context cx, VarScope scope) {
     var constructor =
         new LambdaConstructor(
             scope,
@@ -57,7 +58,7 @@ class WritableController extends ScriptableObject {
     return LambdaConstructor.convertThisObject(thisObj, WritableController.class);
   }
 
-  private static Scriptable constructor(Context cx, Scriptable scope, Object[] args) {
+  private static Scriptable constructor(Context cx, VarScope scope, Object[] args) {
     if (args.length != 0) {
       throw ScriptRuntime.typeError("not constructable");
     }
@@ -70,13 +71,13 @@ class WritableController extends ScriptableObject {
   }
 
   // [AbortSteps()]
-  PromiseWrapper runAbortSteps(Context cx, Scriptable scope, Object reason) {
+  PromiseWrapper runAbortSteps(Context cx, VarScope scope, Object reason) {
     var result = abortAlgorithm.call(cx, scope, sink, new Object[] {reason});
     clearAlgorithms();
     return PromiseWrapper.wrap(cx, scope, result);
   }
 
-  private static Object error(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+  private static Object error(Context cx, VarScope scope, Scriptable thisObj, Object[] args) {
     var self = realThis(thisObj);
     if (self.stream.getStreamState() == WritableStream.State.WRITABLE) {
       Object err = args.length > 0 ? args[0] : Undefined.instance;
@@ -96,7 +97,7 @@ class WritableController extends ScriptableObject {
   // SetUpWritableStreamDefaultController
   void setUp(
       Context cx,
-      Scriptable scope,
+      VarScope scope,
       WritableStream stream,
       Callable startAlgo,
       Callable writeAlgo,
@@ -131,7 +132,7 @@ class WritableController extends ScriptableObject {
   // SetUpWritableStreamDefaultControllerFromUnderlyingSink
   void setUpFromSink(
       Context cx,
-      Scriptable scope,
+      VarScope scope,
       WritableStream stream,
       Object sinkObj,
       Callable sizeStrategy,
@@ -191,7 +192,7 @@ class WritableController extends ScriptableObject {
     strategySizeAlgorithm = null;
   }
 
-  private void advanceQueueIfNeeded(Context cx, Scriptable scope) {
+  private void advanceQueueIfNeeded(Context cx, VarScope scope) {
     if (!started || stream.getInFlightWriteRequest() != null) {
       return;
     }
@@ -211,7 +212,7 @@ class WritableController extends ScriptableObject {
   }
 
   // WritableStreamDefaultControllerWrite
-  void doWrite(Context cx, Scriptable scope, Object chunk, double chunkSize) {
+  void doWrite(Context cx, VarScope scope, Object chunk, double chunkSize) {
     try {
       writeQueue.enqueue(cx, scope, chunk, chunkSize);
     } catch (JavaScriptException re) {
@@ -226,7 +227,7 @@ class WritableController extends ScriptableObject {
   }
 
   // WritableStreamDefaultControllerGetChunkSize
-  double getChunkSize(Context cx, Scriptable scope, Object chunk) {
+  double getChunkSize(Context cx, VarScope scope, Object chunk) {
     if (strategySizeAlgorithm == null) {
       return 1.0;
     }
@@ -257,19 +258,19 @@ class WritableController extends ScriptableObject {
   }
 
   // WritableStreamDefaultControllerClose
-  void doClose(Context cx, Scriptable scope) {
+  void doClose(Context cx, VarScope scope) {
     writeQueue.enqueue(cx, scope, CLOSE_SENTINEL, 0.0);
     advanceQueueIfNeeded(cx, scope);
   }
 
   // WritableStreamDefaultControllerError
-  void doError(Context cx, Scriptable scope, Object err) {
+  void doError(Context cx, VarScope scope, Object err) {
     clearAlgorithms();
     stream.startErroring(cx, scope, err);
   }
 
   // WritableStreamDefaultControllerProcessClose
-  private void processClose(Context cx, Scriptable scope) {
+  private void processClose(Context cx, VarScope scope) {
     stream.markCloseRequestInFlight();
     writeQueue.dequeue();
     // assert writeQueue.isEmpty();
@@ -285,7 +286,7 @@ class WritableController extends ScriptableObject {
   }
 
   // WritableStreamDefaultControllerProcessWrite
-  private void processWrite(Context cx, Scriptable scope, Object chunk) {
+  private void processWrite(Context cx, VarScope scope, Object chunk) {
     stream.markFirstWriteRequestInFlight();
     var wp =
         PromiseWrapper.wrap(
@@ -311,7 +312,7 @@ class WritableController extends ScriptableObject {
   }
 
   // WritableStreamDefaultControllerErrorIfNeeded
-  private void errorIfNeeded(Context cx, Scriptable scope, Object err) {
+  private void errorIfNeeded(Context cx, VarScope scope, Object err) {
     if (stream.getStreamState() == WritableStream.State.WRITABLE) {
       doError(cx, scope, err);
     }

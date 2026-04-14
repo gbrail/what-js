@@ -4,8 +4,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+
 import org.mozilla.javascript.Context;
-import org.mozilla.javascript.Scriptable;
+import org.mozilla.javascript.VarScope;
 
 public class Utils {
   public static String readResource(String path) throws IOException {
@@ -25,7 +26,7 @@ public class Utils {
     }
   }
 
-  public static Object evaluateResource(Context cx, Scriptable scope, String path)
+  public static Object evaluateResource(Context cx, VarScope scope, String path)
       throws IOException {
     try (InputStream in = Utils.class.getClassLoader().getResourceAsStream(path)) {
       if (in == null) {

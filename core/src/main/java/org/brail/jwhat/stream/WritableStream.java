@@ -13,6 +13,7 @@ import org.mozilla.javascript.ScriptRuntime;
 import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
 import org.mozilla.javascript.Undefined;
+import org.mozilla.javascript.VarScope;
 
 public class WritableStream extends ScriptableObject {
   enum State {
@@ -35,7 +36,7 @@ public class WritableStream extends ScriptableObject {
   Constructable controllerConstructor;
   Constructable defaultWriterConstructor;
 
-  public static void init(Context cx, Scriptable scope) {
+  public static void init(Context cx, VarScope scope) {
     var writerConstructor = DefaultWriter.init(cx, scope);
     var controllerConstructor = WritableController.init(cx, scope);
     var constructor =
@@ -72,7 +73,7 @@ public class WritableStream extends ScriptableObject {
 
   private static Scriptable constructor(
       Context cx,
-      Scriptable scope,
+      VarScope scope,
       Object[] args,
       Constructable writerCons,
       Constructable controllerCons) {
@@ -102,7 +103,7 @@ public class WritableStream extends ScriptableObject {
     backpressure = false;
   }
 
-  private static Object abort(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+  private static Object abort(Context cx, VarScope scope, Scriptable thisObj, Object[] args) {
     var reason = args.length > 0 ? args[0] : Undefined.instance;
     var self = realThis(thisObj);
     if (self.isLocked()) {
@@ -113,7 +114,7 @@ public class WritableStream extends ScriptableObject {
   }
 
   // WritableStreamAbort
-  Object abort(Context cx, Scriptable scope, Object reason) {
+  Object abort(Context cx, VarScope scope, Object reason) {
     if (state == State.CLOSED || state == State.ERRORED) {
       return PromiseAdapter.resolved(cx, scope, Undefined.instance);
     }
@@ -133,7 +134,7 @@ public class WritableStream extends ScriptableObject {
     return promise.getPromise();
   }
 
-  private static Object close(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+  private static Object close(Context cx, VarScope scope, Scriptable thisObj, Object[] args) {
     var self = realThis(thisObj);
     if (self.isLocked() || self.isCloseQueuedOrInFlight()) {
       return PromiseAdapter.rejected(
@@ -143,7 +144,7 @@ public class WritableStream extends ScriptableObject {
   }
 
   // AcquireWritableStreamDefaultWriter
-  Object acquireDefaultWriter(Context cx, Scriptable scope) {
+  Object acquireDefaultWriter(Context cx, VarScope scope) {
     var w = (DefaultWriter) defaultWriterConstructor.construct(cx, scope, ScriptRuntime.emptyArgs);
     setUpDefaultWriter(w);
     return w;
@@ -152,7 +153,7 @@ public class WritableStream extends ScriptableObject {
   // CreateWritableStream
   static Object createWritableStream(
       Context cx,
-      Scriptable scope,
+      VarScope scope,
       Callable startAlgo,
       Callable writeAlgo,
       Callable closeAlgo,
@@ -170,13 +171,13 @@ public class WritableStream extends ScriptableObject {
   }
 
   private static Object getWriter(
-      Context cx, Scriptable scope, Scriptable thisObj, Constructable writerConstructor) {
+      Context cx, VarScope scope, Scriptable thisObj, Constructable writerConstructor) {
     WritableStream self = realThis(thisObj);
     return writerConstructor.construct(cx, scope, new Object[] {self});
   }
 
   // WritableStreamClose
-  Object doClose(Context cx, Scriptable scope) {
+  Object doClose(Context cx, VarScope scope) {
     if (state == State.CLOSED || state == State.ERRORED) {
       return PromiseAdapter.resolved(cx, scope, Undefined.instance);
     }
@@ -223,7 +224,7 @@ public class WritableStream extends ScriptableObject {
     return backpressure;
   }
 
-  void updateBackpressure(Context cx, Scriptable scope, boolean bp) {
+  void updateBackpressure(Context cx, VarScope scope, boolean bp) {
     assert state == State.WRITABLE;
     assert !isCloseQueuedOrInFlight();
     if (writer != null && bp != backpressure) {
@@ -245,7 +246,7 @@ public class WritableStream extends ScriptableObject {
   }
 
   // WritableStreamDealWithRejection
-  void dealWithRejection(Context cx, Scriptable scope, Object error) {
+  void dealWithRejection(Context cx, VarScope scope, Object error) {
     if (state == WritableStream.State.WRITABLE) {
       startErroring(cx, scope, error);
     } else {
@@ -254,7 +255,7 @@ public class WritableStream extends ScriptableObject {
     }
   }
 
-  private static Callable getSizeStrategy(Scriptable scope, Object stratObj) {
+  private static Callable getSizeStrategy(VarScope scope, Object stratObj) {
     if (stratObj instanceof Scriptable strategy) {
       var sizeFunc = Properties.getOptionalCallable(strategy, "size");
       if (sizeFunc != null) {
@@ -276,7 +277,7 @@ public class WritableStream extends ScriptableObject {
   }
 
   // WritableStreamAddWriteRequest
-  PromiseAdapter addWriteRequest(Context cx, Scriptable scope) {
+  PromiseAdapter addWriteRequest(Context cx, VarScope scope) {
     assert isLocked();
     assert state == State.WRITABLE;
     var p = PromiseAdapter.uninitialized(cx, scope);
@@ -285,7 +286,7 @@ public class WritableStream extends ScriptableObject {
   }
 
   // WritableStreamStartErroring
-  void startErroring(Context cx, Scriptable scope, Object err) {
+  void startErroring(Context cx, VarScope scope, Object err) {
     assert this.error == null;
     assert state == State.WRITABLE;
     assert controller != null;
@@ -300,7 +301,7 @@ public class WritableStream extends ScriptableObject {
   }
 
   // WritableStreamFinishErroring
-  void finishErroring(Context cx, Scriptable scope) {
+  void finishErroring(Context cx, VarScope scope) {
     assert state == State.ERRORING;
     // assert !hasOperationInFlight();
     state = State.ERRORED;
@@ -335,7 +336,7 @@ public class WritableStream extends ScriptableObject {
   }
 
   // WritableStreamRejectCloseAndClosedPromiseAsNeeded
-  private void rejectCloseAsNeeded(Context cx, Scriptable scope) {
+  private void rejectCloseAsNeeded(Context cx, VarScope scope) {
     assert state == State.ERRORED;
     if (closeRequest != null) {
       assert inFlightCloseRequest == null;
@@ -366,14 +367,14 @@ public class WritableStream extends ScriptableObject {
   }
 
   // WritableStreamFinishInFlightWrite
-  void finishInFlightWrite(Context cx, Scriptable scope) {
+  void finishInFlightWrite(Context cx, VarScope scope) {
     assert inFlightWriteRequest != null;
     inFlightWriteRequest.fulfill(cx, scope, Undefined.instance);
     inFlightWriteRequest = null;
   }
 
   // WritableStreamFinishInFlightWriteWithError
-  void finishInFlightWriteWithError(Context cx, Scriptable scope, Object err) {
+  void finishInFlightWriteWithError(Context cx, VarScope scope, Object err) {
     assert inFlightWriteRequest != null;
     inFlightWriteRequest.reject(cx, scope, err);
     inFlightWriteRequest = null;
@@ -382,7 +383,7 @@ public class WritableStream extends ScriptableObject {
   }
 
   // WritableStreamFinishInFlightClose
-  void finishInFlightClose(Context cx, Scriptable scope) {
+  void finishInFlightClose(Context cx, VarScope scope) {
     assert inFlightCloseRequest != null;
     inFlightCloseRequest.fulfill(cx, scope, Undefined.instance);
     inFlightCloseRequest = null;
@@ -401,7 +402,7 @@ public class WritableStream extends ScriptableObject {
   }
 
   // WritableStreamFinishInFlightCloseWithError
-  void finishInFlightCloseWithError(Context cx, Scriptable scope, Object err) {
+  void finishInFlightCloseWithError(Context cx, VarScope scope, Object err) {
     assert inFlightCloseRequest != null;
     inFlightCloseRequest.reject(cx, scope, err);
     inFlightCloseRequest = null;

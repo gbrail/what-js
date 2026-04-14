@@ -2,6 +2,7 @@ package org.brail.jwhat.url;
 
 import java.util.ArrayList;
 import java.util.List;
+
 import org.brail.jwhat.core.impl.URLUtils;
 import org.mozilla.javascript.Constructable;
 import org.mozilla.javascript.Context;
@@ -10,6 +11,7 @@ import org.mozilla.javascript.ScriptRuntime;
 import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
 import org.mozilla.javascript.Undefined;
+import org.mozilla.javascript.VarScope;
 
 public class URL extends ScriptableObject {
   String scheme = "";
@@ -23,7 +25,7 @@ public class URL extends ScriptableObject {
   String port;
   URLSearchParams queryObj;
 
-  public static void init(Context cx, Scriptable scope) {
+  public static void init(Context cx, VarScope scope) {
     var paramsConstructor = URLSearchParams.init(cx, scope);
     var c = new LambdaConstructor(scope, "URL", 1, URL::constructor);
     c.defineConstructorMethod(
@@ -47,7 +49,7 @@ public class URL extends ScriptableObject {
     c.definePrototypeMethod(scope, "toString", 0, URL::toString);
     c.definePrototypeProperty(cx, "origin", URL::getOrigin);
     c.definePrototypeProperty(
-        cx, "searchParams", (thisObj) -> URL.getQuery(thisObj, paramsConstructor));
+        cx, "searchParams", (thisObj) -> URL.getQuery(scope, thisObj, paramsConstructor));
     ScriptableObject.defineProperty(scope, "URL", c, ScriptableObject.DONTENUM);
   }
 
@@ -387,17 +389,17 @@ public class URL extends ScriptableObject {
     }
   }
 
-  private static Object toString(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+  private static Object toString(Context cx, VarScope scope, Scriptable thisObj, Object[] args) {
     return realThis(thisObj).serialize();
   }
 
-  private static Object getQuery(Scriptable thisObj, Constructable prototype) {
+  private static Object getQuery(VarScope scope, Scriptable thisObj, Constructable prototype) {
     var self = realThis(thisObj);
     if (self.queryObj == null) {
       self.queryObj =
           (URLSearchParams)
               prototype.construct(
-                  Context.getCurrentContext(), thisObj, new Object[] {'?' + self.query});
+                  Context.getCurrentContext(), scope, new Object[] {'?' + self.query});
       self.queryObj.setURL(self);
     }
     return self.queryObj;
