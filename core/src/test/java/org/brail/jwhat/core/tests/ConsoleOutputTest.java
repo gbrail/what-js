@@ -9,11 +9,11 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mozilla.javascript.Context;
-import org.mozilla.javascript.Scriptable;
+import org.mozilla.javascript.VarScope;
 
 public class ConsoleOutputTest {
   private static Context cx;
-  private static Scriptable scope;
+  private static VarScope scope;
   private static String lastLine;
 
   @BeforeAll

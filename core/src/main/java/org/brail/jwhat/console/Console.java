@@ -7,7 +7,6 @@ import org.mozilla.javascript.Context;
 import org.mozilla.javascript.LambdaFunction;
 import org.mozilla.javascript.ScriptRuntime;
 import org.mozilla.javascript.Scriptable;
-import org.mozilla.javascript.VarScope;
 import org.mozilla.javascript.ScriptableObject;
 import org.mozilla.javascript.SymbolKey;
 import org.mozilla.javascript.Undefined;
@@ -64,95 +63,92 @@ public class Console extends ScriptableObject {
     defineProperty(
         "assert",
         new LambdaFunction(
-            this,
+            scope,
             "assert",
             1,
-            (Context lcx, Scriptable ls, Scriptable thisObj, Object[] args) -> assertImpl(args)),
+            (Context lcx, VarScope ls, Scriptable thisObj, Object[] args) -> assertImpl(args)),
         ScriptableObject.DONTENUM);
     defineProperty(
         "debug",
         new LambdaFunction(
-            this,
+            scope,
             "debug",
             1,
-            (Context lcx, Scriptable ls, Scriptable thisObj, Object[] args) ->
+            (Context lcx, VarScope ls, Scriptable thisObj, Object[] args) ->
                 logImpl("debug", args)),
         ScriptableObject.DONTENUM);
     defineProperty(
         "error",
         new LambdaFunction(
-            this,
+            scope,
             "error",
             1,
-            (Context lcx, Scriptable ls, Scriptable thisObj, Object[] args) ->
+            (Context lcx, VarScope ls, Scriptable thisObj, Object[] args) ->
                 logImpl("error", args)),
         ScriptableObject.DONTENUM);
     defineProperty(
         "info",
         new LambdaFunction(
-            this,
+            scope,
             "info",
             1,
-            (Context lcx, Scriptable ls, Scriptable thisObj, Object[] args) ->
-                logImpl("info", args)),
+            (Context lcx, VarScope ls, Scriptable thisObj, Object[] args) -> logImpl("info", args)),
         ScriptableObject.DONTENUM);
     defineProperty(
         "log",
         new LambdaFunction(
-            this,
+            scope,
             "log",
             1,
-            (Context lcx, Scriptable ls, Scriptable thisObj, Object[] args) ->
-                logImpl("log", args)),
+            (Context lcx, VarScope ls, Scriptable thisObj, Object[] args) -> logImpl("log", args)),
         ScriptableObject.DONTENUM);
     defineProperty(
         "warn",
         new LambdaFunction(
-            this,
+            scope,
             "warn",
             1,
-            (Context lcx, Scriptable ls, Scriptable thisObj, Object[] args) ->
-                logImpl("warn", args)),
+            (Context lcx, VarScope ls, Scriptable thisObj, Object[] args) -> logImpl("warn", args)),
         ScriptableObject.DONTENUM);
     defineProperty(
         "count",
         new LambdaFunction(
-            this,
+            scope,
             "count",
             1,
-            (Context lcx, Scriptable ls, Scriptable thisObj, Object[] args) -> count(args)),
+            (Context lcx, VarScope ls, Scriptable thisObj, Object[] args) -> count(args)),
         ScriptableObject.DONTENUM);
     defineProperty(
         "countReset",
         new LambdaFunction(
-            this,
+            scope,
             "countReset",
             1,
-            (Context lcx, Scriptable ls, Scriptable thisObj, Object[] args) -> countReset(args)),
+            (Context lcx, VarScope ls, Scriptable thisObj, Object[] args) -> countReset(args)),
         ScriptableObject.DONTENUM);
     defineProperty(
         "time",
         new LambdaFunction(
-            this,
+            scope,
             "time",
             1,
-            (Context lcx, Scriptable ls, Scriptable thisObj, Object[] args) -> time(args)),
+            (Context lcx, VarScope ls, Scriptable thisObj, Object[] args) -> time(args)),
         ScriptableObject.DONTENUM);
     defineProperty(
         "timeLog",
         new LambdaFunction(
-            this,
+            scope,
             "timeLog",
             1,
-            (Context lcx, Scriptable ls, Scriptable thisObj, Object[] args) -> timeLog(args)),
+            (Context lcx, VarScope ls, Scriptable thisObj, Object[] args) -> timeLog(args)),
         ScriptableObject.DONTENUM);
     defineProperty(
         "timeEnd",
         new LambdaFunction(
-            this,
+            scope,
             "timeEnd",
             1,
-            (Context lcx, Scriptable ls, Scriptable thisObj, Object[] args) -> timeEnd(args)),
+            (Context lcx, VarScope ls, Scriptable thisObj, Object[] args) -> timeEnd(args)),
         ScriptableObject.DONTENUM);
     ScriptableObject.defineProperty(scope, "console", this, ScriptableObject.DONTENUM);
   }

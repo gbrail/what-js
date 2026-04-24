@@ -20,7 +20,7 @@ import org.jline.terminal.TerminalBuilder;
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.RhinoException;
 import org.mozilla.javascript.ScriptRuntime;
-import org.mozilla.javascript.Scriptable;
+import org.mozilla.javascript.VarScope;
 
 public class CLI implements Closeable {
   private static final Pattern WS = Pattern.compile("\\s");
@@ -39,7 +39,7 @@ public class CLI implements Closeable {
     }
   }
 
-  private Scriptable initialize(Context cx) {
+  private VarScope initialize(Context cx) {
     var scope = cx.initStandardObjects();
     Console.builder().printer(new ConsolePrinter(writer)).install(cx, scope);
     Events.init(cx, scope);
@@ -103,7 +103,7 @@ public class CLI implements Closeable {
     }
   }
 
-  private boolean handleCommand(Context cx, Scriptable scope, String line) {
+  private boolean handleCommand(Context cx, VarScope scope, String line) {
     String[] parts = WS.split(line, 2);
     switch (parts[0]) {
       case ".load":
@@ -132,7 +132,7 @@ public class CLI implements Closeable {
     writer.println("invalid command");
   }
 
-  private void doLoad(Context cx, Scriptable scope, String fileName) {
+  private void doLoad(Context cx, VarScope scope, String fileName) {
     var p = Path.of(fileName);
     try (var rdr = new FileReader(fileName, StandardCharsets.UTF_8)) {
       cx.evaluateReader(scope, rdr, p.getFileName().toString(), 1, null);

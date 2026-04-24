@@ -65,8 +65,7 @@ public class PromiseWrapper {
   }
 
   /** Register a callback that will be called when the promise resolves. */
-  public void then(
-      Context cx, VarScope scope, ResultCallback resolveCb, ResultCallback rejectCb) {
+  public void then(Context cx, VarScope scope, ResultCallback resolveCb, ResultCallback rejectCb) {
     var resolve =
         new LambdaFunction(
             scope,

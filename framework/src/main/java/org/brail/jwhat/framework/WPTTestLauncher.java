@@ -14,12 +14,13 @@ import org.mozilla.javascript.LambdaFunction;
 import org.mozilla.javascript.ScriptRuntime;
 import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.Undefined;
+import org.mozilla.javascript.VarScope;
 
 public class WPTTestLauncher {
   static final String TEST_BASE = "../testcases";
 
   private final StringBuilder testHarness;
-  private BiConsumer<Context, Scriptable> setupCallback;
+  private BiConsumer<Context, VarScope> setupCallback;
 
   public static WPTTestLauncher newLauncher() throws IOException {
     // Build a test script that includes the standard harness and all of our
@@ -39,7 +40,7 @@ public class WPTTestLauncher {
     return new WPTTestLauncher(completeTestScript);
   }
 
-  public void setSetupCallback(BiConsumer<Context, Scriptable> callback) {
+  public void setSetupCallback(BiConsumer<Context, VarScope> callback) {
     this.setupCallback = callback;
   }
 
@@ -51,8 +52,8 @@ public class WPTTestLauncher {
     this.testHarness = script;
   }
 
-  private Scriptable initializeScope(Context cx, ResultTracker tracker) throws IOException {
-    Scriptable scope = cx.initStandardObjects();
+  private VarScope initializeScope(Context cx, ResultTracker tracker) throws IOException {
+    var scope = cx.initStandardObjects();
     MinimalFetch.init(cx, scope);
     // Parts of the test framework use "self" to find the global scope
     scope.put("self", scope, scope);
@@ -69,7 +70,7 @@ public class WPTTestLauncher {
     return scope;
   }
 
-  private static Object defer(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+  private static Object defer(Context cx, VarScope scope, Scriptable thisObj, Object[] args) {
     assert args.length >= 1;
     Function deferFunc = (Function) args[0];
     cx.enqueueMicrotask(

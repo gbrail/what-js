@@ -2,7 +2,6 @@ package org.brail.jwhat.url;
 
 import java.util.ArrayList;
 import java.util.List;
-
 import org.brail.jwhat.core.impl.URLUtils;
 import org.mozilla.javascript.Constructable;
 import org.mozilla.javascript.Context;

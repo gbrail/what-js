@@ -10,6 +10,7 @@ import org.mozilla.javascript.Function;
 import org.mozilla.javascript.LambdaFunction;
 import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.Undefined;
+import org.mozilla.javascript.VarScope;
 
 public class ResultTracker {
   private final ArrayList<Result> results = new ArrayList<>();
@@ -20,12 +21,12 @@ public class ResultTracker {
    * Return a function that can be passed to add_result_callback in the test harness. The function
    * takes an argument of the "Test" class from the harness and extracts the test result from that.
    */
-  public Function getResultCallback(Scriptable scope) {
+  public Function getResultCallback(VarScope scope) {
     return new LambdaFunction(
         scope,
         "resultCallback",
         1,
-        (Context cx, Scriptable ls, Scriptable thisObj, Object[] args) -> {
+        (Context cx, VarScope ls, Scriptable thisObj, Object[] args) -> {
           assert args.length >= 1;
           var result = new Result(cx, (Scriptable) args[0]);
           results.add(result);
@@ -38,12 +39,12 @@ public class ResultTracker {
    * argument is an array of Test objects and the second is a TestsStatus object that we parse to
    * see if the harness worked.
    */
-  public Function getCompletionCallback(Scriptable scope) {
+  public Function getCompletionCallback(VarScope scope) {
     return new LambdaFunction(
         scope,
         "completionCallback",
         2,
-        (Context cx, Scriptable ls, Scriptable thisObj, Object[] args) -> {
+        (Context cx, VarScope ls, Scriptable thisObj, Object[] args) -> {
           assert args.length >= 2;
           Scriptable ts = (Scriptable) args[1];
           finalStatus = toFinalStatus(getInt(ts, "status"));

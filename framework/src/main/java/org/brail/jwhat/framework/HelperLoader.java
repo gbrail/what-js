@@ -6,7 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.regex.Pattern;
 import org.mozilla.javascript.Context;
-import org.mozilla.javascript.Scriptable;
+import org.mozilla.javascript.VarScope;
 
 public class HelperLoader {
   private static final Pattern SCRIPT_INSTRUCTION = Pattern.compile("//\\s*META:\\s*script=(.*)");
@@ -14,7 +14,7 @@ public class HelperLoader {
   /**
    * Find directives of the form "META: script=xxx" in the input script, and loads the named script.
    */
-  public static void loadHelpers(Context cx, Scriptable scope, String script, Path parentPath) {
+  public static void loadHelpers(Context cx, VarScope scope, String script, Path parentPath) {
     var m = SCRIPT_INSTRUCTION.matcher(script);
     while (m.find()) {
       var scriptName = m.group(1);

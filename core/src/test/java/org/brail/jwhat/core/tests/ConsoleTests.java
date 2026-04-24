@@ -10,7 +10,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mozilla.javascript.Context;
-import org.mozilla.javascript.Scriptable;
+import org.mozilla.javascript.VarScope;
 
 public class ConsoleTests {
   private static Context cx;
@@ -20,8 +20,7 @@ public class ConsoleTests {
   public static void init() throws IOException {
     cx = Context.enter();
     launcher = WPTTestLauncher.newLauncher();
-    launcher.setSetupCallback(
-        (Context cx, Scriptable scope) -> Console.builder().install(cx, scope));
+    launcher.setSetupCallback((Context cx, VarScope scope) -> Console.builder().install(cx, scope));
   }
 
   @AfterAll

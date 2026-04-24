@@ -1,7 +1,6 @@
 package org.brail.jwhat.events;
 
 import java.util.ArrayList;
-
 import org.mozilla.javascript.Callable;
 import org.mozilla.javascript.Constructable;
 import org.mozilla.javascript.Context;

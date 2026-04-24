@@ -55,7 +55,7 @@ public class WritableStream extends ScriptableObject {
         scope,
         "getWriter",
         0,
-        (Context lcx, Scriptable ls, Scriptable to, Object[] args) ->
+        (Context lcx, VarScope ls, Scriptable to, Object[] args) ->
             getWriter(lcx, ls, to, writerConstructor));
     constructor.definePrototypeProperty(cx, "locked", WritableStream::isLocked);
 

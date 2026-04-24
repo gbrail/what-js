@@ -12,11 +12,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mozilla.javascript.Context;
-import org.mozilla.javascript.Scriptable;
+import org.mozilla.javascript.VarScope;
 
 public class PromiseAdapterTests {
   private Context cx;
-  private Scriptable scope;
+  private VarScope scope;
 
   @BeforeEach
   public void init() {

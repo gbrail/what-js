@@ -1,14 +1,12 @@
 package org.brail.jwhat.stream;
 
-import org.brail.jwhat.core.impl.PromiseWrapper;
 import org.mozilla.javascript.Callable;
 import org.mozilla.javascript.Constructable;
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.LambdaConstructor;
-import org.mozilla.javascript.ScriptRuntime;
 import org.mozilla.javascript.Scriptable;
-import org.mozilla.javascript.VarScope;
 import org.mozilla.javascript.ScriptableObject;
+import org.mozilla.javascript.VarScope;
 
 public class DefaultReadableController extends ScriptableObject {
   private ReadableStream stream;
@@ -65,6 +63,7 @@ public class DefaultReadableController extends ScriptableObject {
   }
 
   // SetUpReadableStreamDefaultController
+  /*
   void setUp(
     Context cx, VarScope scope,
     ReadableStream stream,
@@ -84,7 +83,8 @@ public class DefaultReadableController extends ScriptableObject {
       this.pullAlgorithm = pullAlgo;
       this.cancelAlgorithm = cancelAlgo;
       stream.controller = this;
-      var sa = PromiseWrapper.wrap(cx, scope, startAlgo.call(cx, scope, sink, ScriptRuntime.emptyArgs));
+      // TODO what is "sink" supposed to be?
+      var sa = PromiseWrapper.wrap(cx, scope, startAlgo.call(cx, scope, null, ScriptRuntime.emptyArgs));
       sa.then(cx, scope,
         (lcx, ls, val) -> {
           started = true;
@@ -95,4 +95,5 @@ public class DefaultReadableController extends ScriptableObject {
         }
       );
   }
+  */
 }

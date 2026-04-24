@@ -11,9 +11,10 @@ import org.mozilla.javascript.ScriptRuntime;
 import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
 import org.mozilla.javascript.Undefined;
+import org.mozilla.javascript.VarScope;
 
 public class MinimalFetch {
-  public static void init(Context cx, Scriptable scope) throws IOException {
+  public static void init(Context cx, VarScope scope) throws IOException {
     var loadFunc = new LambdaFunction(scope, "load", 1, MinimalFetch::load);
     String miniFetch = Utils.readResource("org/brail/jwhat/framework/mini-fetch.js");
     var exports = (Scriptable) cx.evaluateString(scope, miniFetch, "mini-fetch.js", 1, null);
@@ -25,7 +26,7 @@ public class MinimalFetch {
         scope, "__setFetchBase", setBaseFunc, ScriptableObject.DONTENUM);
   }
 
-  private static Object load(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+  private static Object load(Context cx, VarScope scope, Scriptable thisObj, Object[] args) {
     if (args.length > 0) {
       String name = ScriptRuntime.toString(args[0]);
       Path p = Path.of(name);

@@ -1,7 +1,6 @@
 package org.brail.jwhat.core.impl;
 
 import java.util.concurrent.atomic.AtomicReference;
-
 import org.mozilla.javascript.Callable;
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.LambdaFunction;

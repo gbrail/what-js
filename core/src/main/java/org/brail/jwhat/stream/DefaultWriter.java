@@ -130,8 +130,7 @@ class DefaultWriter extends ScriptableObject {
   }
 
   // WritableStreamDefaultWriterRelease
-  private static Object releaseLock(
-      Context cx, VarScope scope, Scriptable thisObj, Object[] args) {
+  private static Object releaseLock(Context cx, VarScope scope, Scriptable thisObj, Object[] args) {
     var self = realThis(thisObj);
     var err = Errors.newTypeError(cx, scope, "Stream released");
     self.ensureReadyRejected(cx, scope, err);
