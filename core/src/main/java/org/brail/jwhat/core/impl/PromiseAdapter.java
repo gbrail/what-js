@@ -1,6 +1,7 @@
 package org.brail.jwhat.core.impl;
 
 import java.util.concurrent.atomic.AtomicReference;
+
 import org.mozilla.javascript.Callable;
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.LambdaFunction;
@@ -24,7 +25,7 @@ public class PromiseAdapter {
   }
 
   /** Create a new, uninitialized promise. */
-  public static PromiseAdapter uninitialized(Context cx, Scriptable scope) {
+  public static PromiseAdapter uninitialized(Context cx, VarScope scope) {
     AtomicReference<Callable> resolve = new AtomicReference<>();
     AtomicReference<Callable> reject = new AtomicReference<>();
     var setup =

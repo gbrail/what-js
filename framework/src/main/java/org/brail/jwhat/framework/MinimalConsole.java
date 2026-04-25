@@ -5,9 +5,10 @@ import org.mozilla.javascript.LambdaFunction;
 import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
 import org.mozilla.javascript.Undefined;
+import org.mozilla.javascript.VarScope;
 
 public class MinimalConsole extends ScriptableObject {
-  public static Scriptable init(Context cx, Scriptable scope) {
+  public static Scriptable init(Context cx, VarScope scope) {
     Scriptable c = cx.newObject(scope);
     ScriptableObject.defineProperty(
         c,
@@ -27,7 +28,7 @@ public class MinimalConsole extends ScriptableObject {
     return "Console";
   }
 
-  private static Object log(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+  private static Object log(Context cx, VarScope scope, Object thisObj, Object[] args) {
     StringBuilder msg = new StringBuilder();
     boolean first = true;
     for (Object arg : args) {

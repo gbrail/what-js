@@ -5,11 +5,12 @@ import org.mozilla.javascript.LambdaConstructor;
 import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
 import org.mozilla.javascript.Undefined;
+import org.mozilla.javascript.VarScope;
 
 public class AbortController extends ScriptableObject {
   private final AbortSignal signal;
 
-  public static void init(Context cx, Scriptable scope) {
+  public static void init(Context cx, VarScope scope) {
     var c = new LambdaConstructor(scope, "AbortController", 0, AbortController::constructor);
     c.definePrototypeProperty(cx, "signal", AbortController::getSignal);
     c.definePrototypeMethod(scope, "abort", 1, AbortController::abort);
@@ -25,16 +26,16 @@ public class AbortController extends ScriptableObject {
     return "AbortController";
   }
 
-  private static AbortController realThis(Scriptable thisObj) {
+  private static AbortController realThis(Object thisObj) {
     return LambdaConstructor.convertThisObject(thisObj, AbortController.class);
   }
 
-  private static Scriptable constructor(Context cx, Scriptable scope, Object[] args) {
+  private static Scriptable constructor(Context cx, VarScope scope, Object[] args) {
     var signal = (AbortSignal) cx.newObject(scope, "AbortSignal");
     return new AbortController(signal);
   }
 
-  private static Object abort(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+  private static Object abort(Context cx, VarScope scope, Object thisObj, Object[] args) {
     Object arg = args.length > 0 ? args[0] : Undefined.instance;
     realThis(thisObj).abort(arg);
     return Undefined.instance;
