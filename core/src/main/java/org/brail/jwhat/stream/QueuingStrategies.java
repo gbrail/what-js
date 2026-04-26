@@ -6,11 +6,12 @@ import org.mozilla.javascript.LambdaConstructor;
 import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
 import org.mozilla.javascript.Undefined;
+import org.mozilla.javascript.VarScope;
 
 public class QueuingStrategies extends ScriptableObject {
   private final double highWaterMark;
 
-  public static void init(Context cx, Scriptable scope) {
+  public static void init(Context cx, VarScope scope) {
     var cqs =
         new LambdaConstructor(scope, "CountQueuingStrategy", 1, QueuingStrategies::constructor);
     cqs.definePrototypeProperty(cx, "highWaterMark", QueuingStrategies::getHwm, DONTENUM);
@@ -34,7 +35,7 @@ public class QueuingStrategies extends ScriptableObject {
     return "QueuingStrategy";
   }
 
-  private static Scriptable constructor(Context cx, Scriptable scope, Object[] args) {
+  private static Scriptable constructor(Context cx, VarScope scope, Object[] args) {
     // high water value is evaluated later, and is required, so default to NaN
     double hwm = Double.NaN;
     if (args.length > 0 && args[0] instanceof Scriptable s) {
@@ -43,16 +44,16 @@ public class QueuingStrategies extends ScriptableObject {
     return new QueuingStrategies(hwm);
   }
 
-  private static Object getHwm(Scriptable thisObj) {
+  private static Object getHwm(Object thisObj) {
     var self = LambdaConstructor.convertThisObject(thisObj, QueuingStrategies.class);
     return self.highWaterMark;
   }
 
-  private static Object countSize(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+  private static Object countSize(Context cx, VarScope scope, Object thisObj, Object[] args) {
     return 1;
   }
 
-  private static Object byteSize(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+  private static Object byteSize(Context cx, VarScope scope, Object thisObj, Object[] args) {
     // In the spec, the caller validates this, so we can default to undefined
     if (args.length > 0 && args[0] instanceof Scriptable s) {
       var bl = ScriptableObject.getProperty(s, "byteLength");

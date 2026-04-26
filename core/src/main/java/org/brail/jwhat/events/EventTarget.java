@@ -11,11 +11,12 @@ import org.mozilla.javascript.ScriptRuntime;
 import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
 import org.mozilla.javascript.Undefined;
+import org.mozilla.javascript.VarScope;
 
 public class EventTarget extends ScriptableObject {
   private final HashMap<String, List<Listener>> listeners = new HashMap<>();
 
-  public static void init(Context cx, Scriptable scope) {
+  public static void init(Context cx, VarScope scope) {
     var c = new LambdaConstructor(scope, "EventTarget", 0, EventTarget::constructor);
     c.definePrototypeMethod(scope, "addEventListener", 2, EventTarget::addListener);
     c.definePrototypeMethod(scope, "removeEventListener", 2, EventTarget::removeListener);
@@ -30,16 +31,15 @@ public class EventTarget extends ScriptableObject {
     return "Event";
   }
 
-  private static EventTarget realThis(Scriptable thisObj) {
+  private static EventTarget realThis(Object thisObj) {
     return LambdaConstructor.convertThisObject(thisObj, EventTarget.class);
   }
 
-  private static Scriptable constructor(Context cx, Scriptable scope, Object[] args) {
+  private static Scriptable constructor(Context cx, VarScope scope, Object[] args) {
     return new EventTarget();
   }
 
-  private static Object addListener(
-      Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+  private static Object addListener(Context cx, VarScope scope, Object thisObj, Object[] args) {
     if (args.length < 1) {
       return Undefined.instance;
     }
@@ -104,8 +104,7 @@ public class EventTarget extends ScriptableObject {
     }
   }
 
-  private static Object removeListener(
-      Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+  private static Object removeListener(Context cx, VarScope scope, Object thisObj, Object[] args) {
     if (args.length < 1) {
       return Undefined.instance;
     }
@@ -129,7 +128,7 @@ public class EventTarget extends ScriptableObject {
     return Undefined.instance;
   }
 
-  private static Object dispatch(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+  private static Object dispatch(Context cx, VarScope scope, Object thisObj, Object[] args) {
     if (args.length < 1) {
       return false;
     }

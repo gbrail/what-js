@@ -12,12 +12,13 @@ import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
 import org.mozilla.javascript.SymbolKey;
 import org.mozilla.javascript.Undefined;
+import org.mozilla.javascript.VarScope;
 
 public class URLSearchParams extends ScriptableObject {
   private List<Map.Entry<String, String>> params;
   private URL url;
 
-  static LambdaConstructor init(Context cx, Scriptable scope) {
+  static LambdaConstructor init(Context cx, VarScope scope) {
     var c = new LambdaConstructor(scope, "URLSearchParams", 1, URLSearchParams::constructor);
     c.definePrototypeProperty(cx, "size", URLSearchParams::getSize);
     c.definePrototypeMethod(scope, "append", 2, URLSearchParams::append);
@@ -38,12 +39,12 @@ public class URLSearchParams extends ScriptableObject {
     return URLUtils.encodeURLEncoded(params);
   }
 
-  private static Object stringify(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+  private static Object stringify(Context cx, VarScope scope, Object thisObj, Object[] args) {
     var self = realThis(thisObj);
     return self.toString();
   }
 
-  private static Scriptable constructor(Context context, Scriptable scope, Object[] args) {
+  private static Scriptable constructor(Context context, VarScope scope, Object[] args) {
     var p = new URLSearchParams();
     if (args.length > 0) {
       Object arg = args[0];
@@ -110,7 +111,7 @@ public class URLSearchParams extends ScriptableObject {
     return "URLSearchParams";
   }
 
-  private static URLSearchParams realThis(Scriptable s) {
+  private static URLSearchParams realThis(Object s) {
     return LambdaConstructor.convertThisObject(s, URLSearchParams.class);
   }
 
@@ -137,7 +138,7 @@ public class URLSearchParams extends ScriptableObject {
     return self.params.size();
   }
 
-  private static Object append(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+  private static Object append(Context cx, VarScope scope, Object thisObj, Object[] args) {
     if (args.length > 0) {
       String name = ScriptRuntime.toString(args[0]);
       String value = null;
@@ -151,7 +152,7 @@ public class URLSearchParams extends ScriptableObject {
     return Undefined.instance;
   }
 
-  private static Object delete(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+  private static Object delete(Context cx, VarScope scope, Object thisObj, Object[] args) {
     if (args.length > 0) {
       String name = ScriptRuntime.toString(args[0]);
       String value = null;
@@ -170,7 +171,7 @@ public class URLSearchParams extends ScriptableObject {
     return Undefined.instance;
   }
 
-  private static Object get(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+  private static Object get(Context cx, VarScope scope, Object thisObj, Object[] args) {
     if (args.length > 0) {
       String name = ScriptRuntime.toString(args[0]);
       var self = realThis(thisObj);
@@ -183,7 +184,7 @@ public class URLSearchParams extends ScriptableObject {
     return null;
   }
 
-  private static Object getAll(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+  private static Object getAll(Context cx, VarScope scope, Object thisObj, Object[] args) {
     var a = new ArrayList<String>();
     if (args.length > 0) {
       String name = ScriptRuntime.toString(args[0]);
@@ -197,7 +198,7 @@ public class URLSearchParams extends ScriptableObject {
     return cx.newArray(scope, a.toArray());
   }
 
-  private static Object has(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+  private static Object has(Context cx, VarScope scope, Object thisObj, Object[] args) {
     if (args.length > 0) {
       String name = ScriptRuntime.toString(args[0]);
       String value = null;
@@ -214,7 +215,7 @@ public class URLSearchParams extends ScriptableObject {
     return false;
   }
 
-  private static Object set(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+  private static Object set(Context cx, VarScope scope, Object thisObj, Object[] args) {
     if (args.length > 1) {
       String name = ScriptRuntime.toString(args[0]);
       String value = ScriptRuntime.toString(args[1]);
@@ -240,7 +241,7 @@ public class URLSearchParams extends ScriptableObject {
     return Undefined.instance;
   }
 
-  private static Object sort(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+  private static Object sort(Context cx, VarScope scope, Object thisObj, Object[] args) {
     var self = realThis(thisObj);
     self.params.sort((a, b) -> a.getKey().compareTo(b.getKey()));
     return Undefined.instance;
