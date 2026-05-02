@@ -63,7 +63,7 @@ public class URL extends ScriptableObject {
     this.query = q;
   }
 
-  private static Scriptable constructor(Context cx, Scriptable scope, Object[] args) {
+  private static Scriptable constructor(Context cx, VarScope scope, Object[] args) {
     String urlStr = urlArgument(args);
     String baseStr = baseArgument(args);
     try {
@@ -73,7 +73,7 @@ public class URL extends ScriptableObject {
     }
   }
 
-  private static Object parse(Scriptable scope, Object[] args, Scriptable proto) {
+  private static Object parse(VarScope scope, Object[] args, Scriptable proto) {
     String urlStr = urlArgument(args);
     String baseStr = baseArgument(args);
     try {
@@ -86,7 +86,7 @@ public class URL extends ScriptableObject {
     }
   }
 
-  private static Object canParse(Context cx, Scriptable scope, Scriptable thisObj, Object[] args) {
+  private static Object canParse(Context cx, VarScope scope, Object thisObj, Object[] args) {
     String urlStr = urlArgument(args);
     String baseStr = baseArgument(args);
     if (urlStr == null && baseStr == null) {
@@ -182,7 +182,7 @@ public class URL extends ScriptableObject {
     return s.toString();
   }
 
-  private static URL realThis(Scriptable thisObj) {
+  private static URL realThis(Object thisObj) {
     return LambdaConstructor.convertThisObject(thisObj, URL.class);
   }
 
@@ -198,17 +198,17 @@ public class URL extends ScriptableObject {
     }
   }
 
-  private static Object getProtocol(Scriptable thisObj) {
+  private static Object getProtocol(Object thisObj) {
     return realThis(thisObj).scheme + ':';
   }
 
-  private static void setProtocol(Scriptable thisObj, Object val) {
+  private static void setProtocol(Object thisObj, Object val) {
     String s = ScriptRuntime.toString(val);
     var self = realThis(thisObj);
     self.reparse(s + ':', URLParser.ParseState.SCHEME_START);
   }
 
-  private static Object getHash(Scriptable thisObj) {
+  private static Object getHash(Object thisObj) {
     var self = realThis(thisObj);
     if (self.fragment == null || self.fragment.isEmpty()) {
       return "";
@@ -216,7 +216,7 @@ public class URL extends ScriptableObject {
     return '#' + self.fragment.toString();
   }
 
-  private static void setHash(Scriptable thisObj, Object val) {
+  private static void setHash(Object thisObj, Object val) {
     String s = ScriptRuntime.toString(val);
     var self = realThis(thisObj);
     if (s.isEmpty()) {
@@ -229,7 +229,7 @@ public class URL extends ScriptableObject {
     self.reparse(s, URLParser.ParseState.FRAGMENT);
   }
 
-  private static Object getSearch(Scriptable thisObj) {
+  private static Object getSearch(Object thisObj) {
     var self = realThis(thisObj);
     if (self.query == null || self.query.isEmpty()) {
       return "";
@@ -237,7 +237,7 @@ public class URL extends ScriptableObject {
     return '?' + self.query;
   }
 
-  private static void setSearch(Scriptable thisObj, Object val) {
+  private static void setSearch(Object thisObj, Object val) {
     String s = ScriptRuntime.toString(val);
     var self = realThis(thisObj);
     if (s.startsWith("?")) {
@@ -254,7 +254,7 @@ public class URL extends ScriptableObject {
     self.reparse(s, URLParser.ParseState.QUERY);
   }
 
-  private static Object getHost(Scriptable thisObj) {
+  private static Object getHost(Object thisObj) {
     var self = realThis(thisObj);
     if (self.host == null) {
       return "";
@@ -265,7 +265,7 @@ public class URL extends ScriptableObject {
     return self.host + ':' + self.port;
   }
 
-  private static void setHost(Scriptable thisObj, Object val) {
+  private static void setHost(Object thisObj, Object val) {
     String s = ScriptRuntime.toString(val);
     var self = realThis(thisObj);
     if (self.opaquePath != null) {
@@ -274,13 +274,13 @@ public class URL extends ScriptableObject {
     self.reparse(s, URLParser.ParseState.HOST);
   }
 
-  private static Object getHostname(Scriptable thisObj) {
+  private static Object getHostname(Object thisObj) {
     var self = realThis(thisObj);
     // TODO serialize host
     return self.host == null ? "" : self.host;
   }
 
-  private static void setHostname(Scriptable thisObj, Object val) {
+  private static void setHostname(Object thisObj, Object val) {
     String s = ScriptRuntime.toString(val);
     var self = realThis(thisObj);
     if (self.opaquePath != null) {
@@ -289,11 +289,11 @@ public class URL extends ScriptableObject {
     self.reparse(s, URLParser.ParseState.HOSTNAME);
   }
 
-  private static Object getPassword(Scriptable thisObj) {
+  private static Object getPassword(Object thisObj) {
     return realThis(thisObj).password;
   }
 
-  private static void setPassword(Scriptable thisObj, Object val) {
+  private static void setPassword(Object thisObj, Object val) {
     String s = ScriptRuntime.toString(val);
     var self = realThis(thisObj);
     if (self.upPortNotAllowed()) {
@@ -302,13 +302,13 @@ public class URL extends ScriptableObject {
     self.password = s;
   }
 
-  private static Object getPathname(Scriptable thisObj) {
+  private static Object getPathname(Object thisObj) {
     StringBuilder sb = new StringBuilder();
     realThis(thisObj).serializePath(sb);
     return sb.toString();
   }
 
-  private static void setPathname(Scriptable thisObj, Object val) {
+  private static void setPathname(Object thisObj, Object val) {
     String s = ScriptRuntime.toString(val);
     var self = realThis(thisObj);
     if (self.opaquePath != null) {
@@ -318,12 +318,12 @@ public class URL extends ScriptableObject {
     self.reparse(s, URLParser.ParseState.PATH_START);
   }
 
-  private static Object getPort(Scriptable thisObj) {
+  private static Object getPort(Object thisObj) {
     var self = realThis(thisObj);
     return self.port == null ? "" : self.port;
   }
 
-  private static void setPort(Scriptable thisObj, Object val) {
+  private static void setPort(Object thisObj, Object val) {
     String s = ScriptRuntime.toString(val);
     var self = realThis(thisObj);
     if (self.upPortNotAllowed()) {
@@ -339,7 +339,7 @@ public class URL extends ScriptableObject {
     return realThis(thisObj).username;
   }
 
-  private static void setUsername(Scriptable thisObj, Object val) {
+  private static void setUsername(Object thisObj, Object val) {
     String s = ScriptRuntime.toString(val);
     var self = realThis(thisObj);
     if (self.upPortNotAllowed()) {
@@ -348,7 +348,7 @@ public class URL extends ScriptableObject {
     self.username = s;
   }
 
-  private static Object getOrigin(Scriptable thisObj) {
+  private static Object getOrigin(Object thisObj) {
     var self = realThis(thisObj);
     if (URLUtils.schemeHasOrigin(self.scheme)) {
       var s = new StringBuilder();
@@ -373,7 +373,7 @@ public class URL extends ScriptableObject {
     return realThis(scriptable).serialize();
   }
 
-  private static void setHref(Scriptable thisObj, Object val) {
+  private static void setHref(Object thisObj, Object val) {
     String s = ScriptRuntime.toString(val);
     var self = realThis(thisObj);
     // This re-parse is a bit different because among other things it can throw
@@ -388,11 +388,11 @@ public class URL extends ScriptableObject {
     }
   }
 
-  private static Object toString(Context cx, VarScope scope, Scriptable thisObj, Object[] args) {
+  private static Object toString(Context cx, VarScope scope, Object thisObj, Object[] args) {
     return realThis(thisObj).serialize();
   }
 
-  private static Object getQuery(VarScope scope, Scriptable thisObj, Constructable prototype) {
+  private static Object getQuery(VarScope scope, Object thisObj, Constructable prototype) {
     var self = realThis(thisObj);
     if (self.queryObj == null) {
       self.queryObj =

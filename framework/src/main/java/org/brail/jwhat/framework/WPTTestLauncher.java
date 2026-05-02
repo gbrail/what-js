@@ -19,25 +19,24 @@ import org.mozilla.javascript.VarScope;
 public class WPTTestLauncher {
   static final String TEST_BASE = "../testcases";
 
-  private final StringBuilder testHarness;
+  private final String testHarness;
+  private final ArrayList<String> resources = new ArrayList<>();
   private BiConsumer<Context, VarScope> setupCallback;
 
-  public static WPTTestLauncher newLauncher() throws IOException {
-    // Build a test script that includes the standard harness and all of our
-    // code to link it to Java.
-    String harness = Utils.readResource("org/brail/jwhat/framework/testharness.js");
-    StringBuilder completeTestScript = new StringBuilder(harness);
-
-    completeTestScript.append(
-        """
+  private static final String PREAMBLE =
+      """
     setup(null, {
       debug: false
     });
     add_result_callback(__testResultTracker);
     add_completion_callback(__testCompletionTracker);
-    """);
+  """;
 
-    return new WPTTestLauncher(completeTestScript);
+  public static WPTTestLauncher newLauncher() throws IOException {
+    // Build a test script that includes the standard harness and all of our
+    // code to link it to Java.
+    String harness = Utils.readResource("org/brail/jwhat/framework/testharness.js");
+    return new WPTTestLauncher(harness);
   }
 
   public void setSetupCallback(BiConsumer<Context, VarScope> callback) {
@@ -45,18 +44,20 @@ public class WPTTestLauncher {
   }
 
   public void addResource(String path) throws IOException {
-    testHarness.append(Utils.readResource("org/brail/jwhat/framework/" + path));
+    resources.add(Utils.readResource("org/brail/jwhat/framework/" + path));
   }
 
-  private WPTTestLauncher(StringBuilder script) {
-    this.testHarness = script;
+  private WPTTestLauncher(String testHarness) {
+    this.testHarness = testHarness;
   }
 
   private VarScope initializeScope(Context cx, ResultTracker tracker) throws IOException {
     var scope = cx.initStandardObjects();
     MinimalFetch.init(cx, scope);
     // Parts of the test framework use "self" to find the global scope
-    scope.put("self", scope, scope);
+    var global = scope.get("global", scope);
+    assert global != null;
+    scope.put("self", scope, global);
     // Some tests use the console
     scope.put("console", scope, MinimalConsole.init(cx, scope));
     // Tools used by the test framework to hook into our stuff
@@ -86,7 +87,14 @@ public class WPTTestLauncher {
     var scope = initializeScope(cx, tracker);
     // For the harness to actually work, build the whole harness and our
     // test script into a big script and run it all together.
-    cx.evaluateString(scope, String.valueOf(testHarness) + script, "test.js", 1, null);
+    cx.suspendMicrotaskProcessing();
+    cx.evaluateString(scope, testHarness, "testharness.js", 1, null);
+    cx.evaluateString(scope, PREAMBLE, "preamble.js", 1, null);
+    for (var r : resources) {
+      cx.evaluateString(scope, r, "resource.js", 1, null);
+    }
+    cx.evaluateString(scope, script.toString(), "test.js", 1, null);
+    cx.resumeMicrotaskProcessing();
     return tracker;
   }
 
